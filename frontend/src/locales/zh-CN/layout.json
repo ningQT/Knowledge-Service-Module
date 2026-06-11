@@ -1,0 +1,28 @@
+{
+  "brand": "KSM Console",
+  "nav": {
+    "dashboard": "概览",
+    "graph": "图谱",
+    "knowledge": "知识库",
+    "ingest": "写入",
+    "search": "检索",
+    "searchLexicon": "检索词表",
+    "ontology": "本体管理",
+    "apiManagement": "API 管理",
+    "settings": "设置"
+  },
+  "instance": {
+    "placeholder": "选择实例"
+  },
+  "language": {
+    "en": "EN",
+    "zh": "中"
+  },
+  "auth": {
+    "logout": "退出登录"
+  },
+  "aria": {
+    "openMenu": "打开菜单",
+    "closeMenu": "关闭菜单"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "notFound": "文档未找到",
+  "return": {
+    "graph": "返回图谱",
+    "knowledge": "返回知识库",
+    "search": "返回检索"
+  },
+  "metadata": {
+    "title": "元数据",
+    "type": "类型",
+    "layer": "层级",
+    "domain": "域",
+    "kind": "种类",
+    "verification": "审核状态",
+    "edit": "编辑元数据",
+    "save": "保存元数据",
+    "updated": "元数据已更新",
+    "failed": "元数据更新失败"
+  },
+  "delete": {
+    "button": "删除笔记",
+    "title": "删除笔记",
+    "description": "将删除该笔记文件，并从索引和关系中移除。",
+    "confirm": "确认删除",
+    "cancel": "取消",
+    "failed": "删除笔记失败"
+  },
+  "review": {
+    "title": "审核",
+    "markReviewed": "标记为已审核",
+    "markUnreviewed": "改为未审核",
+    "markNeedsRevision": "标记为需修订",
+    "updated": "审核状态已更新",
+    "failed": "审核状态更新失败"
+  },
+  "concepts": {
+    "title": "概念"
+  },
+  "relatedNodes": {
+    "title": "关联笔记"
+  }
+}

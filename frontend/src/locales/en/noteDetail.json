@@ -1,0 +1,42 @@
+{
+  "notFound": "Note not found.",
+  "return": {
+    "graph": "Back to graph",
+    "knowledge": "Back to knowledge base",
+    "search": "Back to search"
+  },
+  "metadata": {
+    "title": "Metadata",
+    "type": "Type",
+    "layer": "Layer",
+    "domain": "Domain",
+    "kind": "Kind",
+    "verification": "Review Status",
+    "edit": "Edit metadata",
+    "save": "Save metadata",
+    "updated": "Metadata updated",
+    "failed": "Failed to update metadata"
+  },
+  "delete": {
+    "button": "Delete note",
+    "title": "Delete note",
+    "description": "This deletes the note file and removes it from indexes and relations.",
+    "confirm": "Delete",
+    "cancel": "Cancel",
+    "failed": "Failed to delete note"
+  },
+  "review": {
+    "title": "Review",
+    "markReviewed": "Mark as reviewed",
+    "markUnreviewed": "Mark as unreviewed",
+    "markNeedsRevision": "Mark as needs revision",
+    "updated": "Review status updated",
+    "failed": "Failed to update review status"
+  },
+  "concepts": {
+    "title": "Concepts"
+  },
+  "relatedNodes": {
+    "title": "Related Notes"
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "loading": "Loading...",
+  "error": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred"
+  },
+  "tryAgain": "Try Again",
+  "noData": "No data",
+  "selectInstance": "Please select an instance first.",
+  "save": "Save",
+  "cancel": "Cancel",
+  "reset": "Reset",
+  "resetDefault": "Reset Default",
+  "search": "Search",
+  "truncated": "truncated",
+  "back": "Back",
+  "close": "Close",
+  "reviewActions": {
+    "verified": "Reviewed",
+    "unverified": "Unreviewed",
+    "draft": "Needs revision"
+  },
+  "enums": {
+    "verification": {
+      "verified": "Reviewed",
+      "unverified": "Unreviewed",
+      "draft": "Needs revision",
+      "truncated": "Truncated",
+      "unresolved": "Unresolved"
+    },
+    "noteType": {
+      "card": "Card",
+      "source": "Source",
+      "map": "Map"
+    },
+    "domain": {
+      "memory": "Memory management",
+      "agent": "Agent",
+      "nlp": "Natural language processing",
+      "coding": "Programming",
+      "ai": "AI",
+      "ml": "Machine learning",
+      "math": "Math",
+      "product": "Product",
+      "general": "General"
+    },
+    "kind": {
+      "architecture": "Architecture",
+      "method": "Method",
+      "concept": "Concept",
+      "tool": "Tool",
+      "case": "Case",
+      "report": "Report",
+      "article": "Article",
+      "note": "Note",
+      "paper": "Paper"
+    },
+    "graphLayer": {
+      "1": "Source",
+      "2": "Card",
+      "3": "Map"
+    },
+    "relation": {
+      "source_trace": "Source trace",
+      "direct_link": "Direct link",
+      "map_contains": "Map contains",
+      "concept_overlap": "Concept overlap",
+      "unresolved_link": "Unresolved link"
+    },
+    "jobStatus": {
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "success": "Success",
+      "failed": "Failed",
+      "partial_failed": "Partial failed",
+      "cancelled": "Cancelled"
+    },
+    "searchIntent": {
+      "card_scatter": "Card scatter",
+      "map_first": "Map first",
+      "source_first": "Source first",
+      "hybrid": "Hybrid",
+      "concept": "Concept",
+      "topic_scan": "Topic scan",
+      "compare": "Compare",
+      "relation": "Relation",
+      "source_trace": "Source trace",
+      "fallback": "Fallback"
+    },
+    "searchPath": {
+      "card_scatter": "Card scatter",
+      "map_priority": "Map priority",
+      "map_first": "Map first",
+      "source_first": "Source first",
+      "hybrid": "Hybrid"
+    }
+  },
+  "apiErrors": {
+    "INGEST_ONLY_MD": "Only .md files are supported",
+    "INGEST_FILE_UTF8": "File must be UTF-8 encoded",
+    "INGEST_JOB_ALREADY_RUNNING": "This knowledge base already has a running ingest job",
+    "JOB_NOT_FOUND": "Job not found",
+    "JOB_NOT_RUNNING": "Job is not running",
+    "SETTINGS_EMPTY_UPDATE": "Request body must contain at least one field",
+    "INSTANCE_NOT_FOUND": "Instance not found",
+    "INSTANCE_ALREADY_EXISTS": "Instance name already exists",
+    "INSTANCE_NAME_REQUIRED": "Instance name is required",
+    "INSTANCE_VAULT_PATH_UNSAFE": "Instance vault path is outside the configured data directory",
+    "TEMPLATE_NOT_FOUND": "Template not found",
+    "NOTE_NOT_FOUND": "Note not found",
+    "NOTE_VERIFICATION_INVALID": "Invalid review status",
+    "AUTH_REQUIRED": "Please log in first",
+    "AUTH_INVALID_CREDENTIALS": "Invalid username or password",
+    "AUTH_SETUP_REQUIRED": "Please initialize the administrator account first",
+    "AUTH_SETUP_ALREADY_DONE": "The administrator account has already been initialized",
+    "AUTH_FORBIDDEN": "You do not have permission to perform this action",
+    "API_KEY_INVALID": "Invalid API key",
+    "API_KEY_SCOPE_FORBIDDEN": "The API key scope is not sufficient",
+    "REQUEST_FAILED": "Request failed"
+  }
+}

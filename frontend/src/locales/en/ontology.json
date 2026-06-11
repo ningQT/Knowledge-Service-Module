@@ -1,0 +1,100 @@
+{
+  "title": "Ontology",
+  "description": "Manage entities, types, relations, and evidence for the current instance.",
+  "tabs": {
+    "entities": "Entities",
+    "types": "Types",
+    "relations": "Relations",
+    "review": "Review"
+  },
+  "status": {
+    "active": "Active",
+    "candidate": "Candidate",
+    "deprecated": "Deprecated"
+  },
+  "searchable": {
+    "on": "Searchable",
+    "off": "Not searchable"
+  },
+  "actions": {
+    "create": "Create",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "addAlias": "Add Alias",
+    "addEvidence": "Add Evidence"
+  },
+  "empty": {
+    "default": "No data",
+    "description": "Create entities, types, or relations to see them here.",
+    "noInstanceTitle": "No instance selected",
+    "noInstanceDescription": "Select a knowledge base instance before managing ontology data."
+  },
+  "dialog": {
+    "createEntity": "Create Entity",
+    "editEntity": "Edit Entity",
+    "createType": "Create Type",
+    "editType": "Edit Type",
+    "createRelation": "Create Relation",
+    "editRelation": "Edit Relation"
+  },
+  "form": {
+    "name": "Name",
+    "description": "Description",
+    "entityType": "Entity Type",
+    "entityTypeUnset": "No Type",
+    "relationType": "Relation Type",
+    "sourceEntity": "Source Entity",
+    "targetEntity": "Target Entity",
+    "aliasText": "Alias",
+    "filePath": "File Path",
+    "snippet": "Snippet",
+    "evidenceType": "Evidence Type",
+    "searchPlaceholder": "Search by name or description"
+  },
+  "relationTypes": {
+    "is_a": "Is a",
+    "has_role": "Has role",
+    "part_of": "Part of",
+    "related_to": "Related to",
+    "caused_by": "Caused by",
+    "influenced_by": "Influenced by"
+  },
+  "delete": {
+    "title": "Confirm Delete",
+    "description": "Delete \"{{name}}\"? This action cannot be undone."
+  },
+  "review": {
+    "title": "Candidate Review",
+    "description": "Review auto-extracted ontology candidates. Approved items enter recall.",
+    "approve": "Approve",
+    "reject": "Reject",
+    "batchApprove": "Batch Approve",
+    "batchReject": "Batch Reject",
+    "selected": "{{count}} selected",
+    "noPending": "No pending candidates",
+    "filterSource": "Filter by source",
+    "filterStatus": "Filter by status",
+    "sourceAuto": "Auto-extracted",
+    "sourceManual": "Manual",
+    "confirmApprove": "Approve {{count}} items?",
+    "confirmReject": "Reject {{count}} items?"
+  },
+  "stats": {
+    "title": "Overview",
+    "cacheStatus": "Cache status",
+    "cached": "Cached",
+    "notCached": "Not cached",
+    "candidateCount": "Pending",
+    "activeCount": "Active",
+    "deprecatedCount": "Deprecated"
+  },
+  "switch": {
+    "globalEnabled": "Global switch",
+    "instanceEnabled": "Instance switch",
+    "enable": "Enable ontology",
+    "disable": "Disable ontology",
+    "enabled": "Enabled",
+    "disabled": "Disabled"
+  }
+}

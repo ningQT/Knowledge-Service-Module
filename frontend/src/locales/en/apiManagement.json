@@ -1,0 +1,243 @@
+{
+  "title": "API Management",
+  "description": "Manage external system access to KSM knowledge services, including API keys, authorization boundaries, endpoint usage, and integration examples.",
+  "scope": {
+    "read": "read",
+    "write": "write"
+  },
+  "overview": {
+    "enabledKeys": "Enabled keys",
+    "keysHelper": "{{read}} read / {{write}} write",
+    "authorizedInstances": "Authorized knowledge bases",
+    "authorizedHelper": "Unique grants across all keys",
+    "lastUsed": "Last used",
+    "lastUsedHelper": "From API Key last-used timestamps",
+    "neverUsed": "No usage yet",
+    "copyBaseUrl": "Copy Base URL"
+  },
+  "auth": {
+    "apiKeyOnly": "External access uses API Key",
+    "title": "Authentication",
+    "description": "External systems should call KSM with an API Key. Prefer the Bearer header; x-api-key is accepted for compatibility.",
+    "headerTitle": "Recommended header",
+    "readTitle": "read scope",
+    "readDescription": "Search, list knowledge bases, read notes, read graph data, and poll job status.",
+    "writeTitle": "write scope",
+    "writeDescription": "Includes read access and can ingest documents, sync, reindex, update metadata, and delete notes."
+  },
+  "apiKeys": {
+    "title": "External API Keys",
+    "description": "Issue keys for external systems and restrict them to selected knowledge bases and scopes.",
+    "refresh": "Refresh",
+    "loading": "Loading API keys...",
+    "empty": "No API keys yet",
+    "instancesCount": "{{count}} knowledge bases",
+    "lastUsed": "Last used {{value}}",
+    "neverUsed": "Never used",
+    "scope": {
+      "read": "Read only",
+      "write": "Read and write"
+    },
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    },
+    "create": {
+      "name": "Name",
+      "namePlaceholder": "Example: CRM search service",
+      "scope": "Scope",
+      "instances": "Authorized Knowledge Bases",
+      "noInstances": "Create a knowledge base before authorizing an API key.",
+      "submit": "Create API Key"
+    },
+    "secret": {
+      "title": {
+        "created": "Save {{name}}'s New API Key Now",
+        "rotated": "Save {{name}}'s Rotated API Key Now"
+      },
+      "description": "For security, this plaintext key is only shown once.",
+      "warning": "After closing this dialog, the full key cannot be viewed again. Copy it now and keep it safe.",
+      "copy": "Copy API Key",
+      "copied": "Copied. Keep it safe.",
+      "failed": "Copy failed. Please copy it manually.",
+      "close": "I saved it, close"
+    },
+    "action": {
+      "edit": "Edit",
+      "enable": "Enable",
+      "disable": "Disable",
+      "rotate": "Rotate",
+      "delete": "Delete"
+    },
+    "edit": {
+      "title": "Edit API Key Permissions: {{name}}",
+      "description": "Adjust which knowledge bases this API key can access.",
+      "instances": "Authorized Knowledge Bases",
+      "noInstances": "There are no knowledge bases to authorize yet.",
+      "cancel": "Cancel",
+      "save": "Save Permissions"
+    },
+    "confirm": {
+      "rotate": "Rotate this API key? The old key will stop working immediately.",
+      "delete": "Delete this API key?"
+    },
+    "error": {
+      "nameRequired": "API key name is required"
+    }
+  },
+  "quickStart": {
+    "title": "Recommended integration path",
+    "description": "Use search as the primary knowledge service entrypoint, then read notes or graph data only when the caller needs more context.",
+    "steps": {
+      "createKey": {
+        "title": "Create a key",
+        "description": "Name it after the external system so rotation and auditing stay clear."
+      },
+      "grant": {
+        "title": "Grant knowledge bases",
+        "description": "Authorize only the instances this system actually needs."
+      },
+      "search": {
+        "title": "Call search",
+        "description": "Start with POST /search for most knowledge-service requests."
+      },
+      "read": {
+        "title": "Read details",
+        "description": "Fetch notes, facets, stats, or graph data when richer context is needed."
+      },
+      "write": {
+        "title": "Write when trusted",
+        "description": "Use write keys for internal systems that ingest or maintain content."
+      }
+    }
+  },
+  "catalog": {
+    "title": "External service endpoints",
+    "description": "These are the API Key-accessible endpoints external systems should use. Admin auth, API Key management, and LLM settings endpoints are intentionally excluded.",
+    "recommended": "Recommended",
+    "expand": "Details",
+    "details": "Usage notes",
+    "errors": "Common errors",
+    "errorDescription": "401 means the API key is missing or invalid; 403 means scope or knowledge-base authorization is insufficient; 404 means the target resource does not exist; 409 means a write job conflict."
+  },
+  "groups": {
+    "search": "Search service",
+    "instances": "Knowledge base read",
+    "notes": "Note read and maintenance",
+    "graph": "Graph read",
+    "ingest": "Ingest and jobs",
+    "maintenance": "Sync and index maintenance"
+  },
+  "endpoints": {
+    "search": {
+      "title": "Search knowledge across authorized instances",
+      "description": "Primary entrypoint for external systems that need answers or relevant knowledge cards.",
+      "detail": "Body supports query, instance_ids, layer_filter, verification_filter, and include_comprehension. Use it for fast node retrieval."
+    },
+    "searchAnswer": {
+      "title": "Generate knowledge synthesis",
+      "description": "Returns an LLM-generated answer from knowledge maps and cards with source-note citations.",
+      "detail": "Uses map_card_first strategy. Source notes are citation targets, not the default reading material."
+    },
+    "searchAnswerJob": {
+      "title": "Start synthesis job",
+      "description": "Starts answer generation and returns a job_id for progress tracking.",
+      "detail": "Use this for UI workflows that need visible map discovery, card reading, citation tracing, and synthesis steps."
+    },
+    "searchAnswerJobStatus": {
+      "title": "Get synthesis job status",
+      "description": "Polls steps, warnings, and the final answer result.",
+      "detail": "Jobs are in-memory runtime state and may expire after completion."
+    },
+    "searchAnswerJobSse": {
+      "title": "Stream synthesis job events",
+      "description": "Streams answer generation progress as server-sent events.",
+      "detail": "Events include step updates, thought summaries, citation trace updates, completion, and failure."
+    },
+    "instanceList": {
+      "title": "List authorized knowledge bases",
+      "description": "Returns only the instances the API Key is allowed to access.",
+      "detail": "Use this to discover instance IDs before search, note reads, graph reads, or ingest."
+    },
+    "instanceDetail": {
+      "title": "Get knowledge base details",
+      "description": "Returns metadata for one authorized knowledge base.",
+      "detail": "Requires instance access. API Keys cannot use admin-only create, update, or delete instance endpoints."
+    },
+    "instanceStats": {
+      "title": "Get knowledge base statistics",
+      "description": "Returns note counts, verification distribution, domain distribution, relation count, and last ingest time.",
+      "detail": "Useful for monitoring whether an external integration is reading from a populated and recently updated instance."
+    },
+    "noteList": {
+      "title": "List notes",
+      "description": "Lists indexed notes with optional filters and lightweight search.",
+      "detail": "Supports type, domain, kind, graph_layer, verification, and q query parameters."
+    },
+    "noteFacets": {
+      "title": "List note facets",
+      "description": "Returns normalized metadata facets for building external filters.",
+      "detail": "Use this before note list calls when the external UI needs valid domain, kind, or verification filter values."
+    },
+    "noteDetail": {
+      "title": "Get note detail",
+      "description": "Returns frontmatter and Markdown body for a single note path.",
+      "detail": "The path segment should be URL-encoded when it contains spaces, slashes, or non-ASCII characters."
+    },
+    "noteVerification": {
+      "title": "Update note verification",
+      "description": "Changes the manual review state of one note.",
+      "detail": "Requires write scope. Allowed values are verified, unverified, and draft."
+    },
+    "noteMetadata": {
+      "title": "Update note metadata",
+      "description": "Updates editable frontmatter fields for one note.",
+      "detail": "Requires write scope. Supports domain, kind, and verification; blank domain or kind removes that field."
+    },
+    "noteDelete": {
+      "title": "Delete note",
+      "description": "Deletes the note file and removes its indexed data.",
+      "detail": "Requires write scope and instance authorization. There is no recycle bin in this MVP."
+    },
+    "graph": {
+      "title": "Read graph",
+      "description": "Returns graph nodes and edges for an authorized knowledge base.",
+      "detail": "Supports layer_filter, domain_filter, verification_filter, and include_unresolved query parameters."
+    },
+    "ingest": {
+      "title": "Synchronous ingest",
+      "description": "Uploads one Markdown file and waits for the ingest pipeline response.",
+      "detail": "Requires write scope. Use async ingest for larger files or UI workflows that need progress updates."
+    },
+    "ingestAsync": {
+      "title": "Asynchronous ingest",
+      "description": "Uploads one Markdown file and returns a job_id immediately.",
+      "detail": "Requires write scope. Pair with job status polling or SSE for progress tracking."
+    },
+    "jobStatus": {
+      "title": "Get ingest job status",
+      "description": "Polls the current state, step progress, created files, generated cards, maps, and warnings.",
+      "detail": "Requires read access to the instance. Jobs are in-memory runtime state and may expire after completion."
+    },
+    "jobSse": {
+      "title": "Stream ingest job events",
+      "description": "Streams real-time ingest progress as server-sent events.",
+      "detail": "Requires read access to the instance. Use this for external dashboards that show live ingest progress."
+    },
+    "jobCancel": {
+      "title": "Cancel ingest job",
+      "description": "Requests cancellation for a pending or running ingest job.",
+      "detail": "Requires write scope. Completed, failed, or already cancelled jobs cannot be cancelled again."
+    },
+    "sync": {
+      "title": "Sync from local vault",
+      "description": "Scans the knowledge base vault for filesystem changes and updates the index.",
+      "detail": "Requires write scope. Optional git=true pulls from remote before syncing."
+    },
+    "reindex": {
+      "title": "Rebuild index",
+      "description": "Reindexes notes and relations for one knowledge base.",
+      "detail": "Requires write scope. Use when external maintenance has changed files or index consistency is suspect."
+    }
+  }
+}

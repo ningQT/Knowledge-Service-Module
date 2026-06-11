@@ -1,0 +1,37 @@
+{
+  "filter": {
+    "title": "筛选",
+    "layer": "层级",
+    "verification": "审核状态",
+    "domain": "域",
+    "unresolved": "显示未解析链接",
+    "unresolvedHint": "只显示当前实例内无法解析的虚拟节点。"
+  },
+  "layer": {
+    "sourceNotes": "资料来源",
+    "knowledgeCards": "知识卡片",
+    "knowledgeMaps": "知识地图"
+  },
+  "status": {
+    "nodes": "节点:",
+    "edges": "边:",
+    "nodesUnit": "节点",
+    "relationsUnit": "关系"
+  },
+  "detail": {
+    "noDomain": "无领域",
+    "type": "类型",
+    "layer": "层级",
+    "state": "审核状态",
+    "setStatus": "标记状态",
+    "truncatedHint": "内容曾被截断，请打开笔记检查后再标记状态。",
+    "updateSuccess": "审核状态已更新",
+    "relations": "关系",
+    "concepts": "概念",
+    "openNote": "打开笔记",
+    "closeDetails": "关闭详情",
+    "unresolvedNode": "未解析链接",
+    "unresolvedTitle": "缺失目标",
+    "unresolvedHint": "在当前实例内创建或重命名笔记，或调整链接文本使其可解析。"
+  }
+}

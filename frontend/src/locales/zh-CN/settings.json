@@ -1,0 +1,64 @@
+{
+  "title": "模型配置",
+  "description": "配置写入、检索知识整理以及其他 LLM 功能使用的模型供应商。",
+  "field": {
+    "provider": "供应商",
+    "providerPlaceholder": "选择供应商",
+    "baseUrl": "Base URL",
+    "baseUrlPlaceholder": "输入 OpenAI-compatible 接口地址",
+    "baseUrlDefault": "默认接口地址：{{url}}。如果使用代理，可以在这里覆盖。",
+    "baseUrlRequired": "该供应商需要填写 OpenAI-compatible Base URL。",
+    "baseUrlOptional": "可选。只有供应商或代理要求自定义接口地址时才需要填写。",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "输入 API Key",
+    "showApiKey": "显示 API Key",
+    "hideApiKey": "隐藏 API Key",
+    "model": "模型",
+    "modelPlaceholder": "输入模型名称",
+    "modelExamples": "示例",
+    "temperature": "Temperature：{{value}}",
+    "maxTokens": "Max Tokens"
+  },
+  "fieldNames": {
+    "provider": "供应商",
+    "api_key": "API Key",
+    "model": "模型",
+    "base_url": "Base URL"
+  },
+  "provider": {
+    "managedByBackend": "供应商信息由后端注册组件统一提供。",
+    "docs": "文档"
+  },
+  "capability": {
+    "chat": "对话",
+    "structured_output": "结构化输出",
+    "embedding": "Embedding",
+    "tts": "TTS",
+    "vision": "视觉",
+    "audio_input": "音频输入"
+  },
+  "action": {
+    "save": "保存",
+    "test": "测试连接",
+    "reset": "清空配置"
+  },
+  "test": {
+    "connected": "连接成功，延迟：{{latency}}ms",
+    "failed": "失败：{{error}}",
+    "errors": {
+      "API_KEY_NOT_CONFIGURED": "API Key 未配置",
+      "INCOMPLETE_CONFIGURATION": "配置不完整：{{fields}}",
+      "UNSUPPORTED_PROVIDER": "不支持的供应商：{{provider}}"
+    }
+  },
+  "status": {
+    "title": "当前模型配置状态",
+    "provider": "供应商",
+    "state": "状态",
+    "configured": "已配置",
+    "unconfigured": "未配置",
+    "model": "模型",
+    "baseUrl": "Base URL",
+    "missing": "缺少必填项：{{fields}}。配置完整前，LLM 功能不可用。"
+  }
+}

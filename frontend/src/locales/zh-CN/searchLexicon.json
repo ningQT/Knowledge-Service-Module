@@ -1,0 +1,41 @@
+{
+  "title": "检索词表",
+  "description": "维护当前知识库实例的别名和同义词检索规则。",
+  "searchPlaceholder": "搜索主词、变体或备注",
+  "filters": {
+    "all": "全部类型"
+  },
+  "types": {
+    "alias": "别名",
+    "synonym": "同义词"
+  },
+  "status": {
+    "enabled": "启用",
+    "disabled": "停用"
+  },
+  "actions": {
+    "create": "新增词条",
+    "edit": "编辑",
+    "delete": "删除",
+    "save": "保存"
+  },
+  "empty": {
+    "default": "暂无词条",
+    "description": "为当前实例新增别名或同义词后，会参与检索解析。",
+    "noInstanceTitle": "未选择实例",
+    "noInstanceDescription": "请选择一个知识库实例后维护检索词表。"
+  },
+  "dialog": {
+    "createTitle": "新增词条",
+    "editTitle": "编辑词条"
+  },
+  "form": {
+    "canonical": "主词，例如 agent",
+    "variants": "变体词，用逗号或换行分隔",
+    "notes": "备注"
+  },
+  "delete": {
+    "title": "删除词条",
+    "description": "确定删除“{{term}}”吗？"
+  }
+}

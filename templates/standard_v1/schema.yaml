@@ -1,0 +1,105 @@
+# Frontmatter Schema Definition
+# Reference: 详细设计文档 Section 5.2
+
+fields:
+  type:
+    type: string
+    required: true
+    enum: [source, card, map]
+
+  domain:
+    type: string
+    required: false
+    description: Knowledge domain
+
+  kind:
+    type: string
+    required: false
+    description: Sub-category
+
+  graph_layer:
+    type: integer
+    required: true
+    enum: [0, 1, 2, 3]
+    description: "0=inbox, 1=source, 2=card, 3=map"
+
+  graph_role:
+    type: string
+    required: true
+    enum: [inbox, source, concept, method, index]
+    description: Role in knowledge graph
+
+  verification:
+    type: string
+    required: false
+    default: unverified
+    enum: [verified, unverified, draft]
+
+  status:
+    type: string
+    required: false
+    default: active
+    enum: [draft, active, archived]
+
+  sources:
+    type: list
+    required: false
+    item_type: string
+    description: Source note paths
+
+  concepts:
+    type: list
+    required: false
+    item_type: string
+    description: Core concepts for indexing
+
+  core_concepts:
+    type: list
+    required: false
+    item_type: object
+    description: Structured map core concepts with role/card/summary
+
+  reading_path:
+    type: list
+    required: false
+    item_type: object
+    description: Ordered reading path for a knowledge map
+
+  key_relations:
+    type: list
+    required: false
+    item_type: object
+    description: Key relation triples for compare/relation search
+
+  source_materials:
+    type: list
+    required: false
+    item_type: object
+    description: Source notes referenced by a knowledge map
+
+  linked_maps:
+    type: list
+    required: false
+    item_type: object
+    description: Related knowledge maps
+
+  original_doc:
+    type: string
+    required: false
+    description: Path to original document (source notes)
+
+  extracted_cards:
+    type: list
+    required: false
+    item_type: string
+    description: Cards extracted from this source
+
+  card_count:
+    type: integer
+    required: false
+    description: Number of extracted cards
+
+  updated_at:
+    type: string
+    required: false
+    description: Last update timestamp

@@ -1,0 +1,161 @@
+{
+  "title": "Search Knowledge Base",
+  "placeholder": "Search notes, concepts, maps...",
+  "button": {
+    "search": "Search",
+    "clear": "Clear search"
+  },
+  "stats": {
+    "path": "Path: {{path}}",
+    "total": "Total: {{count}}",
+    "elapsedMs": "Elapsed: {{ms}}ms",
+    "elapsedS": "Elapsed: {{s}}s",
+    "fallback": "Fallback",
+    "score": "score: {{score}}",
+    "mapPriority": "Map priority",
+    "mapSourced": "{{count}} map-sourced"
+  },
+  "tabs": {
+    "core": "Core Hits",
+    "related": "Related Cards",
+    "sources": "Sources",
+    "maps": "Maps"
+  },
+  "noResults": "No {{type}} found",
+  "untitled": "Untitled",
+  "primary": "primary",
+  "comprehension": {
+    "title": "Comprehension Analysis",
+    "conceptCoverage": "Concept Coverage",
+    "documents": "Documents Read ({{count}})",
+    "understanding": "Understanding",
+    "noContent": "No understanding result yet",
+    "duplicates": "Potential Duplicates",
+    "mapInsights": "Map Insights",
+    "hierarchy": "Hierarchy"
+  },
+  "history": {
+    "title": "Recent Queries",
+    "empty": "No search history",
+    "deleteLabel": "Delete recent query: {{query}}"
+  },
+  "basis": {
+    "matchType": "match: {{type}}",
+    "keyword": "keyword: {{keyword}}",
+    "mapSourced": "map sourced"
+  },
+  "context": {
+    "candidates": "Candidates",
+    "domain": "Domain",
+    "facets": "{{count}} facet matches",
+    "keyRelations": "{{count}} map relations"
+  },
+  "answer": {
+    "actionTitle": "LLM Knowledge Synthesis",
+    "actionDescription": "Generate a map/card based answer only when you need a directly usable synthesis.",
+    "generate": "Generate synthesis",
+    "regenerate": "Regenerate",
+    "reset": "Clear",
+    "processTitle": "Generation process",
+    "progressTitle": "Generation progress",
+    "resultTitle": "Knowledge synthesis",
+    "reportTitle": "Knowledge synthesis research report",
+    "thoughtLabel": "LLM process",
+    "thoughtSteps": {
+      "batch_summarization": "Batch card summarization",
+      "answer_synthesis": "Answer synthesis"
+    },
+    "llmProcess": {
+      "empty": "No detailed process summary yet.",
+      "batch": "Summary batch",
+      "cards": "Cards",
+      "cardsCount": "{{count}} card(s)",
+      "fallback": "Rule fallback summary",
+      "used": "Used in final synthesis",
+      "skipped": "Not used in final synthesis",
+      "summary": "Summary",
+      "keyPoints": "Key points",
+      "citations": "Citations",
+      "usedBatches": "Used batches",
+      "topics": "Topics",
+      "sections": "Structured sections",
+      "answerChars": "Answer characters",
+      "reportChars": "Report characters",
+      "sectionContentChars": "Section body characters",
+      "traced": "Traced",
+      "untraced": "Untraced",
+      "llmNotes": "Model-returned process notes",
+      "waitingThoughtData": "Waiting for process data...",
+      "processing": "The LLM is summarizing this batch...",
+      "synthesisRunning": "The LLM is synthesizing the answer...",
+      "elapsed": "Elapsed",
+      "model": "Model",
+      "error": "Error",
+      "tokenUsage": "Token usage",
+      "cardsSummarized": "Summarized cards",
+      "sectionSuccess": "Sections generated",
+      "sectionFallbacks": "Section fallbacks",
+      "overviewFallback": "Overview used rule fallback"
+    },
+    "keyPoints": "Key points",
+    "citations": "Source note citations",
+    "evidenceCards": "Evidence cards",
+    "untraced": "Untraced",
+    "emptyAnswer": "No answer was generated.",
+    "coverage": {
+      "title": "Coverage ledger",
+      "cardsRead": "Cards read",
+      "cardsSummarized": "Summarized",
+      "cardsUsed": "Used in answer",
+      "cardsSkipped": "Skipped by budget",
+      "summaryBatches": "Summary batches",
+      "citationsTraced": "Sources traced",
+      "skippedHint": "{{count}} card(s) did not enter the final synthesis because of the budget."
+    },
+    "sections": {
+      "title": "Structured report",
+      "untitled": "Topic {{index}}",
+      "emptySummary": "No section summary yet.",
+      "keyPoints": "Section points",
+      "citations": "Citations",
+      "batches": "Summary batches",
+      "cards": "Evidence cards",
+      "remaining": "{{count}} relevant card(s) did not enter this final synthesis.",
+      "status": {
+        "covered": "Covered",
+        "partial": "Partial",
+        "untraced": "Untraced"
+      }
+    },
+    "failed": "Answer generation failed",
+    "sseFallback": "Live connection interrupted; polling job status.",
+    "waitingForSteps": "Waiting for the job to start emitting steps...",
+    "warnings": {
+      "noSourceCitation": "No source note citation was produced.",
+      "citationUntraced": "Citation {{id}} was not fully traced to a source note.",
+      "noAuthorizedInstance": "No authorized knowledge bases are available."
+    },
+    "status": {
+      "idle": "Idle",
+      "pending": "Pending",
+      "running": "Running",
+      "success": "Completed",
+      "failed": "Failed"
+    },
+    "stepStatus": {
+      "pending": "Pending",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "steps": {
+      "question_understanding": "Understanding the question",
+      "map_discovery": "Locating knowledge maps",
+      "card_reading": "Reading knowledge cards",
+      "citation_tracing": "Tracing source notes",
+      "batch_summarization": "Summarizing card batches",
+      "answer_synthesis": "Synthesizing the answer",
+      "citation_validation": "Validating citations"
+    }
+  }
+}

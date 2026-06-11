@@ -1,0 +1,70 @@
+# KSM Default Ranking Weights
+# Reference: 知识服务模块检索流程完整设计_v2 Section 12.5
+
+ranking:
+  core_hits:
+    anchor_score_weight: 0.8
+    verification_weight: 0.2
+
+  related_cards:
+    rel_type_weight: 0.35
+    distance_weight: 0.30
+    domain_match_weight: 0.15
+    verification_weight: 0.10
+    concept_hit_weight: 0.10
+
+  source_notes:
+    referenced_by_core_weight: 0.40
+    referenced_by_related_weight: 0.25
+    domain_match_weight: 0.15
+    verification_weight: 0.20
+
+  maps:
+    coverage_weight: 0.40
+    domain_match_weight: 0.30
+    verification_weight: 0.20
+    rel_type_weight: 0.10
+
+  map_priority_boosts:
+    map_sourced: 0.15
+    primary_map: 0.30
+    from_reading_path: 0.08
+    from_map_materials: 0.08
+    map_roles:
+      primary: 0.30
+      core: 0.20
+      hub: 0.15
+      normal: 0.05
+
+  rel_type_weights:
+    direct_link: 1.0
+    source_trace: 1.0
+    extracted_from: 0.9
+    map_contains: 0.8
+    concept_overlap: 0.6
+    fts_fallback: 0.4
+    fts_refill: 0.5
+    ontology_recall: 0.55
+
+  candidate_layer_caps:
+    exact: 1.0
+    phrase: 0.82
+    expanded: 0.58
+    ontology: 0.65
+
+  candidate_synergy:
+    max_bonus: 0.08
+    max_base_ratio: 0.12
+    layer_weights:
+      exact: 0.035
+      phrase: 0.025
+      expanded: 0.012
+
+  distance_penalty:
+    hop_1: 1.0
+    hop_2: 0.4
+
+  verification_scores:
+    verified: 1.0
+    unverified: 0.5
+    draft: 0.2

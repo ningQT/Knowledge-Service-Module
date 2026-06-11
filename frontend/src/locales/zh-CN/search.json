@@ -1,0 +1,161 @@
+{
+  "title": "检索知识库",
+  "placeholder": "搜索笔记、概念、地图...",
+  "button": {
+    "search": "搜索",
+    "clear": "清空检索"
+  },
+  "stats": {
+    "path": "路径: {{path}}",
+    "total": "总计: {{count}}",
+    "elapsedMs": "耗时: {{ms}}ms",
+    "elapsedS": "耗时: {{s}}s",
+    "fallback": "回退",
+    "score": "得分: {{score}}",
+    "mapPriority": "地图优先",
+    "mapSourced": "{{count}} 个地图命中"
+  },
+  "tabs": {
+    "core": "核心命中",
+    "related": "相关卡片",
+    "sources": "来源",
+    "maps": "地图"
+  },
+  "noResults": "未找到{{type}}",
+  "untitled": "未命名",
+  "primary": "主要",
+  "comprehension": {
+    "title": "理解分析",
+    "conceptCoverage": "概念覆盖率",
+    "documents": "文档列表 ({{count}})",
+    "understanding": "理解结果",
+    "noContent": "暂无理解结果",
+    "duplicates": "潜在重复",
+    "mapInsights": "地图洞察",
+    "hierarchy": "层级关系"
+  },
+  "history": {
+    "title": "最近查询",
+    "empty": "暂无搜索历史",
+    "deleteLabel": "删除最近查询：{{query}}"
+  },
+  "basis": {
+    "matchType": "命中: {{type}}",
+    "keyword": "依据: {{keyword}}",
+    "mapSourced": "来自地图"
+  },
+  "context": {
+    "candidates": "候选概念",
+    "domain": "领域",
+    "facets": "{{count}} 个字段命中",
+    "keyRelations": "{{count}} 条地图关系"
+  },
+  "answer": {
+    "actionTitle": "LLM 知识整理",
+    "actionDescription": "需要直接可用的整理答案时，再基于知识地图和知识卡片生成。",
+    "generate": "生成知识整理",
+    "regenerate": "重新生成",
+    "reset": "清空",
+    "processTitle": "生成过程",
+    "progressTitle": "生成过程",
+    "resultTitle": "知识整理结果",
+    "reportTitle": "知识整理研究报告",
+    "thoughtLabel": "LLM 处理过程",
+    "thoughtSteps": {
+      "batch_summarization": "分批摘要知识卡片",
+      "answer_synthesis": "综合整理答案"
+    },
+    "llmProcess": {
+      "empty": "暂无详细处理摘要。",
+      "batch": "摘要批次",
+      "cards": "卡片",
+      "cardsCount": "{{count}} 张卡片",
+      "fallback": "规则兜底摘要",
+      "used": "进入最终合成",
+      "skipped": "未进入最终合成",
+      "summary": "摘要",
+      "keyPoints": "关键点",
+      "citations": "引用",
+      "usedBatches": "使用批次",
+      "topics": "主题",
+      "sections": "结构化章节",
+      "answerChars": "答案字符",
+      "reportChars": "报告字符",
+      "sectionContentChars": "章节正文字符",
+      "traced": "已追溯",
+      "untraced": "未追溯",
+      "llmNotes": "模型返回的处理说明",
+      "waitingThoughtData": "等待处理数据...",
+      "processing": "LLM 正在摘要本批卡片...",
+      "synthesisRunning": "LLM 正在综合整理答案...",
+      "elapsed": "耗时",
+      "model": "模型",
+      "error": "错误",
+      "tokenUsage": "Token 用量",
+      "cardsSummarized": "摘要卡片",
+      "sectionSuccess": "章节生成成功",
+      "sectionFallbacks": "章节兜底",
+      "overviewFallback": "总览使用规则兜底"
+    },
+    "keyPoints": "关键要点",
+    "citations": "Source note 引用",
+    "evidenceCards": "依据卡片",
+    "untraced": "未完全追溯",
+    "emptyAnswer": "暂无生成答案。",
+    "coverage": {
+      "title": "覆盖账本",
+      "cardsRead": "已读取卡片",
+      "cardsSummarized": "已摘要卡片",
+      "cardsUsed": "用于回答",
+      "cardsSkipped": "预算跳过",
+      "summaryBatches": "摘要批次",
+      "citationsTraced": "已追溯来源",
+      "skippedHint": "有 {{count}} 张卡片因预算限制未进入最终整理。"
+    },
+    "sections": {
+      "title": "结构化报告",
+      "untitled": "主题 {{index}}",
+      "emptySummary": "暂无主题摘要。",
+      "keyPoints": "主题要点",
+      "citations": "引用",
+      "batches": "摘要批次",
+      "cards": "证据卡片",
+      "remaining": "还有 {{count}} 张相关卡片未进入本次最终整理。",
+      "status": {
+        "covered": "覆盖完整",
+        "partial": "部分覆盖",
+        "untraced": "未完全追溯"
+      }
+    },
+    "failed": "知识整理生成失败",
+    "sseFallback": "实时连接中断，正在改用轮询获取任务状态。",
+    "waitingForSteps": "正在等待任务开始输出...",
+    "warnings": {
+      "noSourceCitation": "本次结果没有生成 source note 引用。",
+      "citationUntraced": "引用 {{id}} 未能完整追溯到 source note。",
+      "noAuthorizedInstance": "当前没有可用的授权知识库。"
+    },
+    "status": {
+      "idle": "空闲",
+      "pending": "等待中",
+      "running": "生成中",
+      "success": "已完成",
+      "failed": "失败"
+    },
+    "stepStatus": {
+      "pending": "等待中",
+      "running": "进行中",
+      "completed": "已完成",
+      "failed": "失败"
+    },
+    "steps": {
+      "question_understanding": "正在理解问题",
+      "map_discovery": "正在定位知识地图",
+      "card_reading": "正在读取相关知识卡片",
+      "citation_tracing": "正在追溯 source note 引用来源",
+      "batch_summarization": "正在分批摘要知识卡片",
+      "answer_synthesis": "正在综合整理答案",
+      "citation_validation": "正在校验引用关系"
+    }
+  }
+}

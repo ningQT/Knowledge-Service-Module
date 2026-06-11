@@ -1,0 +1,64 @@
+{
+  "title": "Model Configuration",
+  "description": "Configure the model provider used by writing, search answer synthesis, and other LLM features.",
+  "field": {
+    "provider": "Provider",
+    "providerPlaceholder": "Select a provider",
+    "baseUrl": "Base URL",
+    "baseUrlPlaceholder": "Enter OpenAI-compatible endpoint",
+    "baseUrlDefault": "Default endpoint: {{url}}. You can override it when using a proxy.",
+    "baseUrlRequired": "This provider requires an OpenAI-compatible Base URL.",
+    "baseUrlOptional": "Optional. Leave empty unless your provider or proxy requires a custom endpoint.",
+    "apiKey": "API Key",
+    "apiKeyPlaceholder": "Enter API key",
+    "showApiKey": "Show API key",
+    "hideApiKey": "Hide API key",
+    "model": "Model",
+    "modelPlaceholder": "Enter model name",
+    "modelExamples": "Examples",
+    "temperature": "Temperature: {{value}}",
+    "maxTokens": "Max Tokens"
+  },
+  "fieldNames": {
+    "provider": "provider",
+    "api_key": "API key",
+    "model": "model",
+    "base_url": "Base URL"
+  },
+  "provider": {
+    "managedByBackend": "Provider metadata is supplied by the backend registry.",
+    "docs": "Docs"
+  },
+  "capability": {
+    "chat": "Chat",
+    "structured_output": "Structured output",
+    "embedding": "Embedding",
+    "tts": "TTS",
+    "vision": "Vision",
+    "audio_input": "Audio input"
+  },
+  "action": {
+    "save": "Save",
+    "test": "Test Connection",
+    "reset": "Clear Configuration"
+  },
+  "test": {
+    "connected": "Connected. Latency: {{latency}}ms",
+    "failed": "Failed: {{error}}",
+    "errors": {
+      "API_KEY_NOT_CONFIGURED": "API key is not configured",
+      "INCOMPLETE_CONFIGURATION": "Incomplete configuration: {{fields}}",
+      "UNSUPPORTED_PROVIDER": "Unsupported provider: {{provider}}"
+    }
+  },
+  "status": {
+    "title": "Current Configuration Status",
+    "provider": "Provider",
+    "state": "State",
+    "configured": "Configured",
+    "unconfigured": "Not configured",
+    "model": "Model",
+    "baseUrl": "Base URL",
+    "missing": "Missing required fields: {{fields}}. LLM features will be unavailable until configuration is complete."
+  }
+}

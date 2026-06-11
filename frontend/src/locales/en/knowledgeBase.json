@@ -1,0 +1,70 @@
+{
+  "title": "Knowledge Base",
+  "description": "Browse indexed notes in the current knowledge base.",
+  "countUnit": "notes",
+  "searchPlaceholder": "Search title, path, or concepts...",
+  "filters": {
+    "title": "Filters",
+    "clear": "Clear",
+    "all": "All",
+    "type": "Type",
+    "layer": "Layer",
+    "verification": "Review Status",
+    "domain": "Domain",
+    "kind": "Kind"
+  },
+  "sort": {
+    "title": "Title",
+    "type": "Type",
+    "layer": "Layer",
+    "verification": "Review Status",
+    "indexed": "Recently indexed"
+  },
+  "table": {
+    "note": "Note",
+    "type": "Type",
+    "layer": "Layer",
+    "verification": "Review Status"
+  },
+  "empty": {
+    "default": "No notes in this knowledge base yet.",
+    "filtered": "No notes match the current filters.",
+    "noInstancesTitle": "No knowledge bases yet",
+    "noInstancesDescription": "Create a knowledge base before uploading documents and generating notes.",
+    "createFirst": "Create first knowledge base"
+  },
+  "actions": {
+    "deleteNote": "Delete note",
+    "deleteTitle": "Delete note",
+    "deleteDescription": "This deletes the note file and removes it from indexes, relations, and diagnostics.",
+    "confirmDelete": "Delete",
+    "cancel": "Cancel",
+    "deleted": "Note deleted"
+  },
+  "quality": {
+    "missing_sources": "No source",
+    "weak_map_structure": "Thin map",
+    "needs_review": "Needs review",
+    "domain_normalized_to_list": "Domain normalized",
+    "kind_normalized_to_list": "Kind normalized",
+    "aliases_normalized_to_list": "Aliases normalized",
+    "concepts_normalized_to_list": "Concepts normalized",
+    "sources_normalized_to_list": "Sources normalized"
+  },
+  "diagnostics": {
+    "title": "Instance Diagnostics",
+    "issueCount": "{{count}} issues",
+    "unresolved": "Unresolved {{count}}",
+    "missingSources": "No source {{count}}",
+    "unreviewed": "Unreviewed {{percent}}%",
+    "empty": "No actionable issues found in the current instance.",
+    "codes": {
+      "unresolved_link": "Broken link",
+      "isolated_node": "Isolated",
+      "missing_sources": "No source",
+      "field_warning": "Field",
+      "weak_map_structure": "Map",
+      "high_unreviewed_ratio": "Review"
+    }
+  }
+}

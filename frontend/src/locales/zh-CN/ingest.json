@@ -1,0 +1,45 @@
+{
+  "title": "文档写入管线",
+  "instance": {
+    "current": "当前知识库",
+    "switchHint": "请使用右上角选择器切换",
+    "noInstance": "未选择知识库实例"
+  },
+  "upload": {
+    "hint": "拖拽 .md 文件到此处，或点击选择"
+  },
+  "form": {
+    "domain": "领域（可选）",
+    "domainPlaceholder": "例如 ai, ml, math",
+    "autoMap": "自动生成知识地图"
+  },
+  "action": {
+    "startIngest": "开始写入",
+    "cancelIngest": "取消写入",
+    "reset": "重置"
+  },
+  "cancelDialog": {
+    "title": "取消写入？",
+    "description": "确定要取消正在运行的写入管线吗？当前进度将会丢失。",
+    "confirm": "确认取消",
+    "dismiss": "继续写入"
+  },
+  "progress": {
+    "title": "管线进度",
+    "idle": "上传文件并开始写入以查看进度",
+    "step": "步骤 {{step}}"
+  },
+  "output": {
+    "title": "产出文件"
+  },
+  "steps": {
+    "step1": "结构感知分类",
+    "step2": "路径决策",
+    "step3": "资料来源笔记生成",
+    "step4": "知识定位 / 卡片过滤",
+    "step5": "知识提取",
+    "step6": "知识地图生成",
+    "step7": "关系描述",
+    "step8": "归档索引"
+  }
+}

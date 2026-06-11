@@ -1,0 +1,18 @@
+id: standard_v1
+name: Standard Knowledge Base Template
+version: "1.0"
+description: >
+  Standard template for knowledge service module.
+  Uses Obsidian Vault standard with 4-layer directory structure.
+
+directory_skeleton:
+  - "00-收件箱"
+  - "01-资料来源"
+  - "02-知识卡片"
+  - "03-知识地图"
+  - ".obsidian"
+
+default_config:
+  auto_map: true
+  link_style: wikilinks
+  default_extension: .md

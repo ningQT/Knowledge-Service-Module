@@ -1,0 +1,37 @@
+{
+  "filter": {
+    "title": "Filters",
+    "layer": "Layer",
+    "verification": "Review Status",
+    "domain": "Domain",
+    "unresolved": "Show unresolved links",
+    "unresolvedHint": "Display virtual nodes for links that do not resolve inside this instance."
+  },
+  "layer": {
+    "sourceNotes": "Source Notes",
+    "knowledgeCards": "Knowledge Cards",
+    "knowledgeMaps": "Knowledge Maps"
+  },
+  "status": {
+    "nodes": "Nodes:",
+    "edges": "Edges:",
+    "nodesUnit": "nodes",
+    "relationsUnit": "relations"
+  },
+  "detail": {
+    "noDomain": "No domain",
+    "type": "Type",
+    "layer": "Layer",
+    "state": "Review Status",
+    "setStatus": "Set status",
+    "truncatedHint": "Content was truncated. Open the note to review it before setting the status.",
+    "updateSuccess": "Review status updated",
+    "relations": "Relations",
+    "concepts": "Concepts",
+    "openNote": "Open note",
+    "closeDetails": "Close details",
+    "unresolvedNode": "Unresolved link",
+    "unresolvedTitle": "Missing target",
+    "unresolvedHint": "Create or rename a note in this instance, or update the link text so it resolves."
+  }
+}

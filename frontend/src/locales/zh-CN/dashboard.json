@@ -1,0 +1,58 @@
+{
+  "createInstance": "创建知识库",
+  "createDialog": {
+    "title": "创建知识库",
+    "name": "名称",
+    "namePlaceholder": "输入知识库名称",
+    "autoMap": "自动生成知识地图",
+    "language": "知识库语言",
+    "languageZh": "中文",
+    "languageEn": "英文",
+    "create": "创建",
+    "cancel": "取消",
+    "duplicateName": "实例名称已存在"
+  },
+  "statCards": {
+    "cards": "卡片",
+    "maps": "地图",
+    "sources": "来源",
+    "relations": "关系"
+  },
+  "table": {
+    "title": "实例列表",
+    "col": {
+      "instance": "实例",
+      "language": "语言",
+      "cards": "卡片",
+      "maps": "地图",
+      "sources": "来源",
+      "relations": "关系",
+      "updated": "更新时间",
+      "actions": "操作"
+    },
+    "instanceId": "ID",
+    "copy": {
+      "title": "复制知识库 ID",
+      "copied": "知识库 ID 已复制"
+    }
+  },
+  "noInstances": "暂无实例",
+  "manage": {
+    "edit": "编辑知识库",
+    "delete": "删除知识库",
+    "save": "保存",
+    "saving": "保存中...",
+    "deleteTitle": "删除知识库",
+    "deleteDescription": "将删除该知识库在应用中的记录和索引。默认保留本地文件。",
+    "deleteFiles": "同时删除本地 vault 文件夹",
+    "confirmDelete": "确认删除",
+    "cancel": "取消",
+    "updated": "知识库已更新",
+    "deleted": "知识库已删除"
+  },
+  "action": {
+    "upload": "上传文档",
+    "search": "检索",
+    "graph": "打开图谱"
+  }
+}

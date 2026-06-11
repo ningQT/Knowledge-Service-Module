@@ -1,0 +1,28 @@
+{
+  "brand": "KSM Console",
+  "nav": {
+    "dashboard": "Dashboard",
+    "graph": "Graph",
+    "knowledge": "Knowledge Base",
+    "ingest": "Ingest",
+    "search": "Search",
+    "searchLexicon": "Search Lexicon",
+    "ontology": "Ontology",
+    "apiManagement": "API Management",
+    "settings": "Settings"
+  },
+  "instance": {
+    "placeholder": "Select Instance"
+  },
+  "language": {
+    "en": "EN",
+    "zh": "中"
+  },
+  "auth": {
+    "logout": "Log out"
+  },
+  "aria": {
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  }
+}

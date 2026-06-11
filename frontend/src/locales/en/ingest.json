@@ -1,0 +1,45 @@
+{
+  "title": "Document Ingest Pipeline",
+  "instance": {
+    "current": "Current Instance",
+    "switchHint": "switch in the top-right selector",
+    "noInstance": "No instance selected"
+  },
+  "upload": {
+    "hint": "Drag & drop a .md file here, or click to select"
+  },
+  "form": {
+    "domain": "Domain (optional)",
+    "domainPlaceholder": "e.g. ai, ml, math",
+    "autoMap": "Auto-generate knowledge map"
+  },
+  "action": {
+    "startIngest": "Start Ingest",
+    "cancelIngest": "Cancel Ingest",
+    "reset": "Reset"
+  },
+  "cancelDialog": {
+    "title": "Cancel Ingest",
+    "description": "Are you sure you want to cancel the running ingest pipeline? Progress will be lost.",
+    "confirm": "Cancel Ingest",
+    "dismiss": "Continue"
+  },
+  "progress": {
+    "title": "Pipeline Progress",
+    "idle": "Upload a file and start ingest to see progress",
+    "step": "Step {{step}}"
+  },
+  "output": {
+    "title": "Output Files"
+  },
+  "steps": {
+    "step1": "Structure-aware classification",
+    "step2": "Path decision",
+    "step3": "Source Note generation",
+    "step4": "Knowledge location / card filtering",
+    "step5": "Knowledge extraction",
+    "step6": "Knowledge map generation",
+    "step7": "Relation description",
+    "step8": "Archive and index"
+  }
+}

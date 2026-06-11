@@ -1,0 +1,41 @@
+{
+  "title": "Search Lexicon",
+  "description": "Maintain alias and synonym search rules for the current knowledge base instance.",
+  "searchPlaceholder": "Search canonical terms, variants, or notes",
+  "filters": {
+    "all": "All types"
+  },
+  "types": {
+    "alias": "Alias",
+    "synonym": "Synonym"
+  },
+  "status": {
+    "enabled": "Enabled",
+    "disabled": "Disabled"
+  },
+  "actions": {
+    "create": "New Entry",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save"
+  },
+  "empty": {
+    "default": "No entries",
+    "description": "Add aliases or synonyms for this instance to improve search parsing.",
+    "noInstanceTitle": "No instance selected",
+    "noInstanceDescription": "Select a knowledge base instance before editing the search lexicon."
+  },
+  "dialog": {
+    "createTitle": "New Entry",
+    "editTitle": "Edit Entry"
+  },
+  "form": {
+    "canonical": "Canonical term, e.g. agent",
+    "variants": "Variant terms, separated by commas or line breaks",
+    "notes": "Notes"
+  },
+  "delete": {
+    "title": "Delete Entry",
+    "description": "Delete “{{term}}”?"
+  }
+}

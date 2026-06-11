@@ -1,0 +1,58 @@
+{
+  "createInstance": "Create Instance",
+  "createDialog": {
+    "title": "Create Instance",
+    "name": "Name",
+    "namePlaceholder": "Enter instance name",
+    "autoMap": "Auto Generate Map",
+    "language": "Knowledge base language",
+    "languageZh": "Chinese",
+    "languageEn": "English",
+    "create": "Create",
+    "cancel": "Cancel",
+    "duplicateName": "Instance name already exists"
+  },
+  "statCards": {
+    "cards": "Cards",
+    "maps": "Maps",
+    "sources": "Sources",
+    "relations": "Relations"
+  },
+  "table": {
+    "title": "Instances",
+    "col": {
+      "instance": "Instance",
+      "language": "Language",
+      "cards": "Cards",
+      "maps": "Maps",
+      "sources": "Sources",
+      "relations": "Relations",
+      "updated": "Updated",
+      "actions": "Actions"
+    },
+    "instanceId": "ID",
+    "copy": {
+      "title": "Copy knowledge base ID",
+      "copied": "Knowledge base ID copied"
+    }
+  },
+  "noInstances": "No instances yet",
+  "manage": {
+    "edit": "Edit knowledge base",
+    "delete": "Delete knowledge base",
+    "save": "Save",
+    "saving": "Saving...",
+    "deleteTitle": "Delete knowledge base",
+    "deleteDescription": "This deletes the knowledge base record and index from the app. Local files are kept by default.",
+    "deleteFiles": "Also delete local vault folder",
+    "confirmDelete": "Delete",
+    "cancel": "Cancel",
+    "updated": "Knowledge base updated",
+    "deleted": "Knowledge base deleted"
+  },
+  "action": {
+    "upload": "Upload Document",
+    "search": "Search",
+    "graph": "Open Graph"
+  }
+}

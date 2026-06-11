@@ -1,0 +1,100 @@
+{
+  "title": "本体管理",
+  "description": "维护当前实例的实体、类型、关系和证据数据。",
+  "tabs": {
+    "entities": "实体",
+    "types": "类型",
+    "relations": "关系",
+    "review": "审核"
+  },
+  "status": {
+    "active": "有效",
+    "candidate": "候选",
+    "deprecated": "废弃"
+  },
+  "searchable": {
+    "on": "可检索",
+    "off": "不可检索"
+  },
+  "actions": {
+    "create": "新建",
+    "edit": "编辑",
+    "delete": "删除",
+    "save": "保存",
+    "addAlias": "添加别名",
+    "addEvidence": "添加证据"
+  },
+  "empty": {
+    "default": "暂无数据",
+    "description": "新建实体、类型或关系后，会在此处显示。",
+    "noInstanceTitle": "未选择实例",
+    "noInstanceDescription": "请选择一个知识库实例后管理本体数据。"
+  },
+  "dialog": {
+    "createEntity": "新建实体",
+    "editEntity": "编辑实体",
+    "createType": "新建类型",
+    "editType": "编辑类型",
+    "createRelation": "新建关系",
+    "editRelation": "编辑关系"
+  },
+  "form": {
+    "name": "名称",
+    "description": "描述",
+    "entityType": "实体类型",
+    "entityTypeUnset": "未设置类型",
+    "relationType": "关系类型",
+    "sourceEntity": "源实体",
+    "targetEntity": "目标实体",
+    "aliasText": "别名",
+    "filePath": "文件路径",
+    "snippet": "片段",
+    "evidenceType": "证据类型",
+    "searchPlaceholder": "搜索名称或描述"
+  },
+  "relationTypes": {
+    "is_a": "是一种",
+    "has_role": "具有角色",
+    "part_of": "属于",
+    "related_to": "相关",
+    "caused_by": "由…导致",
+    "influenced_by": "受…影响"
+  },
+  "delete": {
+    "title": "确认删除",
+    "description": "确定删除\"{{name}}\"吗？此操作不可撤销。"
+  },
+  "review": {
+    "title": "候选审核",
+    "description": "审核自动提取的本体候选数据，通过后进入召回。",
+    "approve": "通过",
+    "reject": "废弃",
+    "batchApprove": "批量通过",
+    "batchReject": "批量废弃",
+    "selected": "已选择 {{count}} 项",
+    "noPending": "暂无待审核候选",
+    "filterSource": "来源筛选",
+    "filterStatus": "状态筛选",
+    "sourceAuto": "自动提取",
+    "sourceManual": "手动创建",
+    "confirmApprove": "确认通过 {{count}} 项？",
+    "confirmReject": "确认废弃 {{count}} 项？"
+  },
+  "stats": {
+    "title": "概览",
+    "cacheStatus": "缓存状态",
+    "cached": "已缓存",
+    "notCached": "未缓存",
+    "candidateCount": "待审核",
+    "activeCount": "有效",
+    "deprecatedCount": "已废弃"
+  },
+  "switch": {
+    "globalEnabled": "全局开关",
+    "instanceEnabled": "实例开关",
+    "enable": "启用本体",
+    "disable": "禁用本体",
+    "enabled": "已启用",
+    "disabled": "已禁用"
+  }
+}
