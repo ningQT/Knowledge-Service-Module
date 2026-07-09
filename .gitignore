@@ -33,4 +33,6 @@ PROJECT_STATUS.md
 .kilo
 .claude
 docs
-tests/
+md
+SECURITY_AUDIT_REPORT.md
+tests
