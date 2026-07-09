@@ -245,6 +245,7 @@ class WritePipeline:
         self._last_raw_path: str | None = None
         self._last_llm_truncated: bool = False
         self._current_instance_id: str | None = None
+        self._dedup: Any = None  # Lazy-initialized SemanticDeduplicator
 
     def _language_instruction(self, language: str | None) -> str:
         return LANGUAGE_INSTRUCTIONS.get(
@@ -265,6 +266,13 @@ class WritePipeline:
             existing_card_names=existing_card_names or set(),
             point_role=point_role,
         )
+
+    def _get_deduplicator(self) -> Any:
+        """Return a cached SemanticDeduplicator, creating it on first use."""
+        if self._dedup is None and self.semantic_index:
+            from app.pipeline.semantic_dedup import SemanticDeduplicator
+            self._dedup = SemanticDeduplicator(self.semantic_index, self.settings)
+        return self._dedup
 
     def _run_structured_agent(
         self,
@@ -512,7 +520,8 @@ class WritePipeline:
             _cb(2, "running")
             logger.info("Step 2: path decision for %s", filename)
             path_decision = self._step2_path_decision(
-                filename, classification, vault_path, doc_structure, language_instruction
+                filename, classification, vault_path, doc_structure, language_instruction,
+                source_content=markdown,
             )
             _cb(2, "completed", {
                 "source_name": path_decision.source_name,
@@ -741,6 +750,7 @@ class WritePipeline:
         self, filename: str, classification: DocClassification, vault_path: str,
         structure: MarkdownStructure | None = None,
         language_instruction: str = "",
+        source_content: str = "",
     ) -> PathDecision:
         existing = self.storage.list_files(str(Path(vault_path) / SOURCE_DIR), "*.md")
         existing = existing[:STEP2_MAX_EXISTING_SOURCES]
@@ -778,12 +788,11 @@ class WritePipeline:
         # Semantic dedup: check if a similar source already exists
         if self.semantic_index and self._current_instance_id:
             try:
-                from app.pipeline.semantic_dedup import SemanticDeduplicator
-                dedup = SemanticDeduplicator(self.semantic_index, self.settings)
+                dedup = self._get_deduplicator()
                 dup_path = dedup.find_duplicate_source(
                     self._current_instance_id,
                     new_title=path_decision.source_name,
-                    new_summary="",
+                    new_summary=truncate_with_marker(source_content, 500),
                     new_concepts=classification.topics,
                 )
                 if dup_path and not path_decision.existing_source:
@@ -1147,8 +1156,7 @@ class WritePipeline:
                 merge_target_path = ""
                 if self.semantic_index and self._current_instance_id:
                     try:
-                        from app.pipeline.semantic_dedup import SemanticDeduplicator
-                        dedup = SemanticDeduplicator(self.semantic_index, self.settings)
+                        dedup = self._get_deduplicator()
                         dedup_action, merge_target_path = dedup.should_merge_or_create(
                             self._current_instance_id,
                             new_card_title=card_output.title,
@@ -1207,6 +1215,7 @@ class WritePipeline:
                         dedup_action = "create"
 
                 # If we reach here, action is "create" - proceed as before
+                logger.info("Semantic dedup: creating new card '%s'", card_output.title)
                 if card_truncated:
                     warning = f"Card '{point.card_title}' output was truncated after retry"
                     warnings.append(warning)
