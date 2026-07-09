@@ -105,6 +105,19 @@ class Settings(BaseSettings):
     git_repo_dir: str | None = Field(default=None, alias="KSM_GIT_REPO_DIR")
     git_webhook_secret: str | None = Field(default=None, alias="KSM_GIT_WEBHOOK_SECRET")
 
+    # Semantic deduplication - embedding configuration
+    embedding_provider: str = Field(default="openai", alias="KSM_EMBEDDING_PROVIDER")
+    embedding_base_url: str = Field(default="", alias="KSM_EMBEDDING_BASE_URL")
+    embedding_api_key: str = Field(default="", alias="KSM_EMBEDDING_API_KEY")
+    embedding_model: str = Field(default="text-embedding-3-small", alias="KSM_EMBEDDING_MODEL")
+    embedding_dimension: int = Field(default=1536, alias="KSM_EMBEDDING_DIMENSION")
+    embedding_batch_size: int = Field(default=32, alias="KSM_EMBEDDING_BATCH_SIZE")
+
+    # Semantic deduplication - thresholds
+    dedup_source_threshold: float = Field(default=0.92, alias="KSM_DEDUP_SOURCE_THRESHOLD")
+    dedup_card_threshold: float = Field(default=0.88, alias="KSM_DEDUP_CARD_THRESHOLD")
+    dedup_merge_threshold: float = Field(default=0.90, alias="KSM_DEDUP_MERGE_THRESHOLD")
+
     model_config = {"env_file": _resolve_env_file(), "extra": "ignore"}
 
     def model_post_init(self, __context: object) -> None:
@@ -117,6 +130,16 @@ class Settings(BaseSettings):
             self.config_dir = str(Path(self.config_dir).resolve())
         if self.db_backup_dir:
             self.db_backup_dir = str(Path(self.db_backup_dir).resolve())
+
+    @property
+    def effective_embedding_base_url(self) -> str:
+        """Return embedding_base_url, falling back to llm_base_url when empty."""
+        return self.embedding_base_url if self.embedding_base_url else self.llm_base_url
+
+    @property
+    def effective_embedding_api_key(self) -> str:
+        """Return embedding_api_key, falling back to llm_api_key when empty."""
+        return self.embedding_api_key if self.embedding_api_key else self.llm_api_key
 
 
 @lru_cache
