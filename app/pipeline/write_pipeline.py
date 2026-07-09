@@ -82,6 +82,7 @@ from app.shared_infra.truncation import truncate_with_marker
 from app.storage.database import DatabaseBackend
 from app.storage.filesystem import StorageBackend
 from app.storage.indexer import Indexer
+from app.storage.semantic_index import SemanticIndex
 from app.storage.path_utils import normalize_vault_path, validate_upload_filename
 from app.observability import log_event, next_llm_call_id
 
@@ -231,6 +232,7 @@ class WritePipeline:
         indexer: Indexer,
         validator: SchemaValidator,
         settings: Settings | None = None,
+        semantic_index: SemanticIndex | None = None,
     ):
         self.db = db
         self.storage = storage
@@ -238,9 +240,11 @@ class WritePipeline:
         self.indexer = indexer
         self.validator = validator
         self.settings = settings or get_settings()
+        self.semantic_index = semantic_index
         self._current_result: IngestResult | None = None
         self._last_raw_path: str | None = None
         self._last_llm_truncated: bool = False
+        self._current_instance_id: str | None = None
 
     def _language_instruction(self, language: str | None) -> str:
         return LANGUAGE_INSTRUCTIONS.get(
@@ -447,6 +451,7 @@ class WritePipeline:
         """Execute ingestion without changing the public ingest API."""
         result = IngestResult()
         self._current_result = result  # PIT-14: Allow card generation to update status
+        self._current_instance_id = instance_id
         language_instruction = self._language_instruction(language)
         now = datetime.now(UTC).isoformat()
         map_path = None
@@ -674,6 +679,7 @@ class WritePipeline:
             self._record_job(instance_id, source_path, result, now, job_id)
         finally:
             self.storage = original_storage
+            self._current_instance_id = None
 
         return result
 
@@ -755,7 +761,7 @@ class WritePipeline:
             if toc_text:
                 prompt += f"\n\n文档目录结构：\n{toc_text}"
         try:
-            return self._run_structured_agent(
+            path_decision = self._run_structured_agent(
                 create_step2_path_agent,
                 prompt,
                 register=register_step2_validators,
@@ -767,7 +773,30 @@ class WritePipeline:
                 self._current_result.warnings.append(
                     f"Step 2 path decision fallback used: {type(exc).__name__}"
                 )
-            return self._fallback_path_decision(filename, classification, structure)
+            path_decision = self._fallback_path_decision(filename, classification, structure)
+
+        # Semantic dedup: check if a similar source already exists
+        if self.semantic_index and self._current_instance_id:
+            try:
+                from app.pipeline.semantic_dedup import SemanticDeduplicator
+                dedup = SemanticDeduplicator(self.semantic_index, self.settings)
+                dup_path = dedup.find_duplicate_source(
+                    self._current_instance_id,
+                    new_title=path_decision.source_name,
+                    new_summary="",
+                    new_concepts=classification.topics,
+                )
+                if dup_path and not path_decision.existing_source:
+                    path_decision.existing_source = dup_path
+                    logger.info(
+                        "Semantic dedup: found duplicate source %s for '%s'",
+                        dup_path,
+                        path_decision.source_name,
+                    )
+            except Exception as e:
+                logger.warning("Semantic dedup check in step 2 failed (non-critical): %s", e)
+
+        return path_decision
 
     def _fallback_path_decision(
         self,
@@ -910,7 +939,7 @@ class WritePipeline:
             language_instruction=language_instruction,
         )
         try:
-            return self._run_structured_agent(
+            result = self._run_structured_agent(
                 create_step4_locate_agent,
                 prompt,
                 deps=self._agent_deps(section_id_map=section_id_map),
@@ -920,6 +949,34 @@ class WritePipeline:
         except Exception as e:
             logger.warning("Step 4 locate failed after structured retries; using fallback: %s", e)
             return self._fallback_full_extract(path_decision, structure)
+
+        # Semantic dedup: filter knowledge points similar to existing notes
+        if self.semantic_index and self._current_instance_id and result.knowledge_points:
+            threshold = self.settings.dedup_card_threshold
+            kept: list = []
+            for kp in result.knowledge_points:
+                query_text = f"{kp.name}\n{kp.section_title or ''}"
+                similar = self.semantic_index.find_similar(
+                    self._current_instance_id,
+                    query_text,
+                    threshold=threshold,
+                    top_k=1,
+                )
+                if similar:
+                    logger.info(
+                        "Semantic dedup: rejecting knowledge point '%s' (similar to %s, score=%.4f)",
+                        kp.name,
+                        similar[0]["file_path"],
+                        similar[0]["score"],
+                    )
+                    result.rejected.append(kp.name)
+                else:
+                    kept.append(kp)
+            if len(kept) != len(result.knowledge_points):
+                result.knowledge_points = kept
+                result.total_points = len(kept)
+
+        return result
 
     def _fallback_full_extract(
         self, path_decision: PathDecision, structure: MarkdownStructure
@@ -1084,6 +1141,72 @@ class WritePipeline:
                 card_truncated = card_run.truncated
                 errors, warnings = self._validate_card_quality(card_output)
                 verification = "truncated" if card_truncated else "unverified"
+
+                # Semantic dedup: check if card should merge with existing
+                dedup_action = "create"
+                merge_target_path = ""
+                if self.semantic_index and self._current_instance_id:
+                    try:
+                        from app.pipeline.semantic_dedup import SemanticDeduplicator
+                        dedup = SemanticDeduplicator(self.semantic_index, self.settings)
+                        dedup_action, merge_target_path = dedup.should_merge_or_create(
+                            self._current_instance_id,
+                            new_card_title=card_output.title,
+                            new_card_summary=card_output.summary,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Semantic dedup merge check failed for '%s' (non-critical): %s",
+                            card_output.title,
+                            e,
+                        )
+                        dedup_action = "create"
+
+                if dedup_action == "merge" and merge_target_path:
+                    # Merge: update existing card's frontmatter with new source and concepts
+                    try:
+                        existing_content = self.storage.read_file(
+                            str(Path(vault_path) / merge_target_path)
+                        )
+                        exist_fm, exist_body = parse_frontmatter(existing_content)
+                        # Add new source to sources list
+                        exist_sources = exist_fm.get("sources", [])
+                        if source_path and source_path not in exist_sources:
+                            exist_sources.append(source_path)
+                        exist_fm["sources"] = exist_sources
+                        # Merge concepts
+                        exist_concepts = exist_fm.get("concepts", [])
+                        new_concepts = card_output.concepts or point.concepts
+                        for c in new_concepts:
+                            if c not in exist_concepts:
+                                exist_concepts.append(c)
+                        exist_fm["concepts"] = _truncate_list(exist_concepts, MAX_CARD_CONCEPTS)
+                        exist_fm["updated_at"] = datetime.now(UTC).isoformat()
+                        updated_card = serialize_frontmatter(exist_fm, exist_body)
+                        self.storage.write_file(
+                            str(Path(vault_path) / merge_target_path), updated_card
+                        )
+                        card_paths.append(merge_target_path)
+                        card_contents.append(updated_card)
+                        logger.info(
+                            "Semantic dedup: merged '%s' into existing %s",
+                            card_output.title,
+                            merge_target_path,
+                        )
+                        if self._current_result is not None:
+                            self._current_result.updated_files.append(merge_target_path)
+                        # Skip the rest of the card creation loop iteration
+                        continue
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to merge card '%s' into %s, creating new: %s",
+                            card_output.title,
+                            merge_target_path,
+                            e,
+                        )
+                        dedup_action = "create"
+
+                # If we reach here, action is "create" - proceed as before
                 if card_truncated:
                     warning = f"Card '{point.card_title}' output was truncated after retry"
                     warnings.append(warning)
@@ -1162,6 +1285,23 @@ class WritePipeline:
                 self.storage.write_file(str(Path(vault_path) / card_rel_path), card_content)
                 card_paths.append(card_rel_path)
                 card_contents.append(card_content)
+
+                # Semantic index: update embedding for newly created card
+                if self.semantic_index and self._current_instance_id:
+                    try:
+                        self.semantic_index.add_note(
+                            self._current_instance_id,
+                            card_rel_path,
+                            title=card_output.title,
+                            summary=card_output.summary,
+                            concepts=card_output.concepts or point.concepts,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to update semantic index for card '%s' (non-critical): %s",
+                            card_output.title,
+                            e,
+                        )
             except Exception as e:
                 failed_count += 1
                 message = f"Failed to generate card for '{point.card_title}': {e}"
@@ -1622,12 +1762,46 @@ class WritePipeline:
             relations = extract_all_relations(body, fm, card_path, vault_path, self.storage)
             all_relations.extend(relations)
 
+            # Semantic index: update embedding for each card
+            if self.semantic_index:
+                try:
+                    self.semantic_index.add_note(
+                        instance_id,
+                        card_path,
+                        title=fm.get("title", Path(card_path).stem),
+                        summary=body[:200] if body else "",
+                        concepts=fm.get("concepts", []),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to update semantic index for card %s (non-critical): %s",
+                        card_path,
+                        e,
+                    )
+
         if map_path:
             map_content = self.storage.read_file(str(Path(vault_path) / map_path))
             self.indexer.index_note(instance_id, map_path, map_content)
             fm, body = parse_frontmatter(map_content)
             relations = extract_all_relations(body, fm, map_path, vault_path, self.storage)
             all_relations.extend(relations)
+
+            # Semantic index: update embedding for map
+            if self.semantic_index:
+                try:
+                    self.semantic_index.add_note(
+                        instance_id,
+                        map_path,
+                        title=fm.get("title", Path(map_path).stem),
+                        summary=body[:200] if body else "",
+                        concepts=fm.get("concepts", []),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to update semantic index for map %s (non-critical): %s",
+                        map_path,
+                        e,
+                    )
 
         # Fix unresolved direct_link targets: resolve concept titles to card file paths
         concept_map = _build_concept_path_map(card_paths, card_contents)
@@ -1667,6 +1841,23 @@ class WritePipeline:
         updated_source = serialize_frontmatter(source_fm, source_body)
         self.storage.write_file(str(Path(vault_path) / source_path), updated_source)
         self.indexer.index_note(instance_id, source_path, updated_source)
+
+        # Semantic index: update embedding for source note
+        if self.semantic_index:
+            try:
+                self.semantic_index.add_note(
+                    instance_id,
+                    source_path,
+                    title=source_fm.get("doc_title", Path(source_path).stem),
+                    summary=source_fm.get("doc_summary", ""),
+                    concepts=source_fm.get("concepts", []),
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to update semantic index for source %s (non-critical): %s",
+                    source_path,
+                    e,
+                )
         if map_path:
             map_content = self.storage.read_file(str(Path(vault_path) / map_path))
             self.indexer.index_note(instance_id, map_path, map_content)
