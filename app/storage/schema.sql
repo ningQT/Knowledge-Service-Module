@@ -189,6 +189,21 @@ CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_
 CREATE INDEX IF NOT EXISTS idx_api_clients_enabled ON api_clients(enabled);
 CREATE INDEX IF NOT EXISTS idx_api_client_instances_instance ON api_client_instances(instance_id);
 
+-- 笔记嵌入向量表 (Phase: Semantic Deduplication)
+CREATE TABLE IF NOT EXISTS note_embeddings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    instance_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    embedding_model TEXT NOT NULL,
+    embedding BLOB NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(instance_id, file_path),
+    FOREIGN KEY (instance_id) REFERENCES instances(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_note_embeddings_instance ON note_embeddings(instance_id);
+
 -- ============================================================================
 -- 本体系统运行态表 (Phase 8)
 -- ============================================================================

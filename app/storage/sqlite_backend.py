@@ -73,6 +73,7 @@ class SQLiteBackend(DatabaseBackend):
             self.conn.executescript(schema_sql)
             self.conn.commit()
             self.rebuild_fts()
+        self._create_note_embeddings_table()
         if backup_path:
             self._record_schema_migration(
                 "0002_startup_backup",
@@ -193,6 +194,33 @@ class SQLiteBackend(DatabaseBackend):
         except Exception as e:
             logger.warning("notes_fts migration check failed: %s", e)
         return False
+
+    def _create_note_embeddings_table(self) -> None:
+        """Create note_embeddings table for existing databases."""
+        try:
+            self.conn.execute(
+                """CREATE TABLE IF NOT EXISTS note_embeddings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    instance_id TEXT NOT NULL,
+                    file_path TEXT NOT NULL,
+                    embedding_model TEXT NOT NULL,
+                    embedding BLOB NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(instance_id, file_path),
+                    FOREIGN KEY (instance_id) REFERENCES instances(id)
+                )"""
+            )
+            self.conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_note_embeddings_instance ON note_embeddings(instance_id)"
+            )
+            self.conn.commit()
+            self._record_schema_migration(
+                "0004_create_note_embeddings_table",
+                "Created note_embeddings table for semantic deduplication",
+            )
+        except Exception as e:
+            logger.warning("note_embeddings migration failed: %s", e)
 
     def migrate_fts_to_contentless(self) -> None:
         """Compatibility startup hook for old callers.
