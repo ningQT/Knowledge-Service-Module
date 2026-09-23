@@ -42,6 +42,8 @@
     "name": "名称",
     "description": "描述",
     "entityType": "实体类型",
+    "allEntityTypes": "全部类型",
+    "noEntityTypes": "暂无实体类型",
     "entityTypeUnset": "未设置类型",
     "relationType": "关系类型",
     "sourceEntity": "源实体",

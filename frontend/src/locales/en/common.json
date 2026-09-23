@@ -71,6 +71,7 @@
       "pending": "Pending",
       "running": "Running",
       "completed": "Completed",
+      "completed_with_warnings": "Completed with warnings",
       "success": "Success",
       "failed": "Failed",
       "partial_failed": "Partial failed",

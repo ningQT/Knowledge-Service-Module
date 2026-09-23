@@ -34,7 +34,21 @@ class DatabaseBackend(ABC):
         layer: int | None = None,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        """Full-text search using FTS5."""
+        """基于 FTS5 的全文检索接口定义。
+
+        返回结果按相关度降序排列，同分时按入库序（``notes.id`` 升序）作次级排序，
+        保证同一查询在同一库状态下返回的行序列稳定可复现。
+
+        Args:
+            query: FTS5 MATCH 表达式（非自然语言，需符合 FTS5 语法）。
+            instance_ids: 实例范围白名单。
+            layer: 非 ``None`` 时限定单个 ``graph_layer``。
+            limit: 返回条数上限，作用于排序之后的结果集。
+
+        Returns:
+            命中行列表，字段集合与本次排序改造前逐项一致；
+            相关度分数仅用于排序，不作为返回字段暴露。
+        """
         ...
 
     @abstractmethod

@@ -167,6 +167,8 @@ export default function SettingsPage() {
           <div>
             <label className="block text-sm font-medium mb-1">{t('field.model')}</label>
             <Input
+              name="llm_model"
+              autoComplete="off"
               value={model}
               onChange={(e) => setModel(e.target.value)}
               placeholder={modelExamples[0] || t('field.modelPlaceholder')}
@@ -184,6 +186,8 @@ export default function SettingsPage() {
           </label>
           <div className="relative">
             <Input
+              name="llm_api_key"
+              autoComplete="new-password"
               type={showApiKey ? 'text' : 'password'}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}

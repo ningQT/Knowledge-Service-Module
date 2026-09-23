@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS ingest_jobs /* 写入任务状态表 */ (
 );
 
 -- FTS5 全文索引（external content table + trigram tokenizer 支持中文子串匹配）
--- Reference: 详细设计文档 §9.3 R-07: 查询用子查询而非 JOIN
+-- Reference: 详细设计文档 §9.3 R-07: FTS 匹配须封装在子查询/派生表内，不得直接把 notes_fts 作为 JOIN 左表回表
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts /* FTS5 trigram 全文检索表 */ USING fts5(
     title /* 笔记标题全文索引列 */,
     search_text /* 标题、正文关键内容与结构化元数据的组合索引文本 */,
@@ -188,6 +188,21 @@ CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_api_clients_enabled ON api_clients(enabled);
 CREATE INDEX IF NOT EXISTS idx_api_client_instances_instance ON api_client_instances(instance_id);
+
+-- 笔记嵌入向量表 (Phase: Semantic Deduplication)
+CREATE TABLE IF NOT EXISTS note_embeddings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    instance_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    embedding_model TEXT NOT NULL,
+    embedding BLOB NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(instance_id, file_path),
+    FOREIGN KEY (instance_id) REFERENCES instances(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_note_embeddings_instance ON note_embeddings(instance_id);
 
 -- ============================================================================
 -- 本体系统运行态表 (Phase 8)

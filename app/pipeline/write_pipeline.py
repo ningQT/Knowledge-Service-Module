@@ -82,6 +82,7 @@ from app.shared_infra.truncation import truncate_with_marker
 from app.storage.database import DatabaseBackend
 from app.storage.filesystem import StorageBackend
 from app.storage.indexer import Indexer
+from app.storage.semantic_index import SemanticIndex
 from app.storage.path_utils import normalize_vault_path, validate_upload_filename
 from app.observability import log_event, next_llm_call_id
 
@@ -129,6 +130,12 @@ STEP2_MAX_TOC_HEADINGS = 30
 STEP2_MAX_TOC_CHARS = 1500
 FREE_TEXT_WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]")
 STEP7_ALLOWED_RELATION_TYPES = {"dependency", "comparison", "composition", "extension"}
+MAX_DRAFT_FALLBACK_CARDS = 2
+MAX_STEP5_CARD_FAILURE_RATIO = 0.30
+FATAL_CARD_GENERATION_MARKERS = (
+    "cannot schedule new futures after shutdown",
+    "event loop is closed",
+)
 
 
 @dataclass
@@ -220,6 +227,68 @@ def _db_transaction(db: DatabaseBackend):
     return transaction() if callable(transaction) else nullcontext()
 
 
+def _resolve_step6_status(map_path: str | None, failure_message: str | None) -> str:
+    """解析 Step 6 的步骤状态。
+
+    Args:
+        map_path: 生成成功的知识地图路径。
+        failure_message: 地图生成失败时记录的错误信息。
+
+    Returns:
+        成功时返回 ``completed``，失败时返回 ``failed``。
+    """
+    if map_path:
+        return "completed"
+    return "failed" if failure_message else "completed"
+
+
+def _resolve_card_generation_status(
+    *,
+    failed_count: int,
+    total_count: int,
+    fatal_error: bool = False,
+) -> str:
+    """解析 Step 5 卡片生成的步骤状态。
+
+    Args:
+        failed_count: 生成失败的知识点数量。
+        total_count: 本次尝试生成的知识点总数。
+        fatal_error: 是否遇到不可恢复的执行器错误。
+
+    Returns:
+        ``completed``、``completed_with_warnings`` 或 ``failed``。
+    """
+    if failed_count <= 0:
+        return "completed"
+    if fatal_error or total_count <= 0:
+        return "failed"
+    failure_ratio = failed_count / total_count
+    if failure_ratio > MAX_STEP5_CARD_FAILURE_RATIO:
+        return "failed"
+    return "completed_with_warnings"
+
+
+def _should_allow_draft_fallback(
+    *,
+    failed_count: int,
+    total_count: int,
+    draft_count: int,
+) -> bool:
+    """判断当前失败点是否允许写入 draft 卡片。
+
+    Args:
+        failed_count: 当前累计失败数。
+        total_count: 知识点总数。
+        draft_count: 已生成的 draft 卡片数。
+
+    Returns:
+        允许生成时返回 ``True``。
+    """
+    if total_count <= 0 or draft_count >= MAX_DRAFT_FALLBACK_CARDS:
+        return False
+    return failed_count / total_count <= MAX_STEP5_CARD_FAILURE_RATIO
+
+
 class WritePipeline:
     """Phase-two knowledge write pipeline."""
 
@@ -231,6 +300,7 @@ class WritePipeline:
         indexer: Indexer,
         validator: SchemaValidator,
         settings: Settings | None = None,
+        semantic_index: SemanticIndex | None = None,
     ):
         self.db = db
         self.storage = storage
@@ -238,9 +308,13 @@ class WritePipeline:
         self.indexer = indexer
         self.validator = validator
         self.settings = settings or get_settings()
+        self.semantic_index = semantic_index
         self._current_result: IngestResult | None = None
         self._last_raw_path: str | None = None
         self._last_llm_truncated: bool = False
+        self._last_card_generation_status: str = "completed"
+        self._current_instance_id: str | None = None
+        self._dedup: Any = None  # Lazy-initialized SemanticDeduplicator
 
     def _language_instruction(self, language: str | None) -> str:
         return LANGUAGE_INSTRUCTIONS.get(
@@ -261,6 +335,13 @@ class WritePipeline:
             existing_card_names=existing_card_names or set(),
             point_role=point_role,
         )
+
+    def _get_deduplicator(self) -> Any:
+        """Return a cached SemanticDeduplicator, creating it on first use."""
+        if self._dedup is None and self.semantic_index:
+            from app.pipeline.semantic_dedup import SemanticDeduplicator
+            self._dedup = SemanticDeduplicator(self.semantic_index, self.settings)
+        return self._dedup
 
     def _run_structured_agent(
         self,
@@ -360,10 +441,11 @@ class WritePipeline:
                 model_settings=ModelSettings(
                     max_tokens=max_tokens,
                     temperature=self.settings.llm_temperature,
+                    timeout=self.settings.llm_request_timeout_seconds,
                 ),
             )
             finish_reason = _finish_reason_value(getattr(result.response, "finish_reason", ""))
-            usage = result.usage()
+            usage = result.usage
             usage_counts = _usage_counts(usage)
             log_event(
                 logger,
@@ -447,6 +529,7 @@ class WritePipeline:
         """Execute ingestion without changing the public ingest API."""
         result = IngestResult()
         self._current_result = result  # PIT-14: Allow card generation to update status
+        self._current_instance_id = instance_id
         language_instruction = self._language_instruction(language)
         now = datetime.now(UTC).isoformat()
         map_path = None
@@ -507,7 +590,8 @@ class WritePipeline:
             _cb(2, "running")
             logger.info("Step 2: path decision for %s", filename)
             path_decision = self._step2_path_decision(
-                filename, classification, vault_path, doc_structure, language_instruction
+                filename, classification, vault_path, doc_structure, language_instruction,
+                source_content=markdown,
             )
             _cb(2, "completed", {
                 "source_name": path_decision.source_name,
@@ -575,7 +659,7 @@ class WritePipeline:
                 card_paths, card_contents = self._step5_generate_cards(
                     vault_path, markdown, classification, filter_result, source_path, language_instruction
                 )
-                _cb(5, "completed", {
+                _cb(5, self._last_card_generation_status, {
                     "card_count": len(card_paths),
                     "card_titles": [Path(p).stem for p in card_paths],
                 })
@@ -595,7 +679,7 @@ class WritePipeline:
                 card_paths, card_contents = self._phase3_knowledge_extract(
                     vault_path, markdown, doc_structure, classification, knowledge_map, source_path, language_instruction
                 )
-                _cb(5, "completed", {
+                _cb(5, self._last_card_generation_status, {
                     "card_count": len(card_paths),
                     "card_titles": [Path(p).stem for p in card_paths],
                 })
@@ -613,6 +697,7 @@ class WritePipeline:
                     _cb(6, "completed", {"map_title": None, "core_concepts_count": 0})
                 else:
                     logger.info("Step 6: knowledge map v2 (FR-06 forced output)")
+                    warnings_before = len(result.warnings)
                     map_path, map_content = self._step6_generate_map_v2(
                         vault_path,
                         classification,
@@ -630,7 +715,22 @@ class WritePipeline:
                             "core_concepts_count": len(classification.topics),
                         })
                     else:
-                        _cb(6, "completed", {"map_title": None, "core_concepts_count": 0})
+                        failure_message = (
+                            result.warnings[-1]
+                            if len(result.warnings) > warnings_before
+                            else None
+                        )
+                        summary: dict[str, object] = {
+                            "map_title": None,
+                            "core_concepts_count": 0,
+                        }
+                        if failure_message:
+                            summary["error"] = failure_message
+                        _cb(
+                            6,
+                            _resolve_step6_status(map_path, failure_message),
+                            summary,
+                        )
             else:
                 _cb(6, "completed", {"skipped": True})
 
@@ -674,6 +774,7 @@ class WritePipeline:
             self._record_job(instance_id, source_path, result, now, job_id)
         finally:
             self.storage = original_storage
+            self._current_instance_id = None
 
         return result
 
@@ -735,6 +836,7 @@ class WritePipeline:
         self, filename: str, classification: DocClassification, vault_path: str,
         structure: MarkdownStructure | None = None,
         language_instruction: str = "",
+        source_content: str = "",
     ) -> PathDecision:
         existing = self.storage.list_files(str(Path(vault_path) / SOURCE_DIR), "*.md")
         existing = existing[:STEP2_MAX_EXISTING_SOURCES]
@@ -755,7 +857,7 @@ class WritePipeline:
             if toc_text:
                 prompt += f"\n\n文档目录结构：\n{toc_text}"
         try:
-            return self._run_structured_agent(
+            path_decision = self._run_structured_agent(
                 create_step2_path_agent,
                 prompt,
                 register=register_step2_validators,
@@ -767,7 +869,29 @@ class WritePipeline:
                 self._current_result.warnings.append(
                     f"Step 2 path decision fallback used: {type(exc).__name__}"
                 )
-            return self._fallback_path_decision(filename, classification, structure)
+            path_decision = self._fallback_path_decision(filename, classification, structure)
+
+        # Semantic dedup: check if a similar source already exists
+        if self.semantic_index and self._current_instance_id:
+            try:
+                dedup = self._get_deduplicator()
+                dup_path = dedup.find_duplicate_source(
+                    self._current_instance_id,
+                    new_title=path_decision.source_name,
+                    new_summary=truncate_with_marker(source_content, 500),
+                    new_concepts=classification.topics,
+                )
+                if dup_path and not path_decision.existing_source:
+                    path_decision.existing_source = dup_path
+                    logger.info(
+                        "Semantic dedup: found duplicate source %s for '%s'",
+                        dup_path,
+                        path_decision.source_name,
+                    )
+            except Exception as e:
+                logger.warning("Semantic dedup check in step 2 failed (non-critical): %s", e)
+
+        return path_decision
 
     def _fallback_path_decision(
         self,
@@ -910,7 +1034,7 @@ class WritePipeline:
             language_instruction=language_instruction,
         )
         try:
-            return self._run_structured_agent(
+            result = self._run_structured_agent(
                 create_step4_locate_agent,
                 prompt,
                 deps=self._agent_deps(section_id_map=section_id_map),
@@ -920,6 +1044,34 @@ class WritePipeline:
         except Exception as e:
             logger.warning("Step 4 locate failed after structured retries; using fallback: %s", e)
             return self._fallback_full_extract(path_decision, structure)
+
+        # Semantic dedup: filter knowledge points similar to existing notes
+        if self.semantic_index and self._current_instance_id and result.knowledge_points:
+            threshold = self.settings.dedup_card_threshold
+            kept: list = []
+            for kp in result.knowledge_points:
+                query_text = f"{kp.name}\n{kp.section_title or ''}"
+                similar = self.semantic_index.find_similar(
+                    self._current_instance_id,
+                    query_text,
+                    threshold=threshold,
+                    top_k=1,
+                )
+                if similar:
+                    logger.info(
+                        "Semantic dedup: rejecting knowledge point '%s' (similar to %s, score=%.4f)",
+                        kp.name,
+                        similar[0]["file_path"],
+                        similar[0]["score"],
+                    )
+                    result.rejected.append(kp.name)
+                else:
+                    kept.append(kp)
+            if len(kept) != len(result.knowledge_points):
+                result.knowledge_points = kept
+                result.total_points = len(kept)
+
+        return result
 
     def _fallback_full_extract(
         self, path_decision: PathDecision, structure: MarkdownStructure
@@ -1042,6 +1194,8 @@ class WritePipeline:
         failed_count = 0
         draft_count = 0
         total_count = len(points)
+        fatal_error = False
+        self._last_card_generation_status = "completed"
 
         for point in points:
             context = fast_context
@@ -1084,6 +1238,72 @@ class WritePipeline:
                 card_truncated = card_run.truncated
                 errors, warnings = self._validate_card_quality(card_output)
                 verification = "truncated" if card_truncated else "unverified"
+
+                # Semantic dedup: check if card should merge with existing
+                dedup_action = "create"
+                merge_target_path = ""
+                if self.semantic_index and self._current_instance_id:
+                    try:
+                        dedup = self._get_deduplicator()
+                        dedup_action, merge_target_path = dedup.should_merge_or_create(
+                            self._current_instance_id,
+                            new_card_title=card_output.title,
+                            new_card_summary=card_output.summary,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Semantic dedup merge check failed for '%s' (non-critical): %s",
+                            card_output.title,
+                            e,
+                        )
+                        dedup_action = "create"
+
+                if dedup_action == "merge" and merge_target_path:
+                    # Merge: update existing card's frontmatter with new source and concepts
+                    try:
+                        existing_content = self.storage.read_file(
+                            str(Path(vault_path) / merge_target_path)
+                        )
+                        exist_fm, exist_body = parse_frontmatter(existing_content)
+                        # Add new source to sources list
+                        exist_sources = exist_fm.get("sources", [])
+                        if source_path and source_path not in exist_sources:
+                            exist_sources.append(source_path)
+                        exist_fm["sources"] = exist_sources
+                        # Merge concepts
+                        exist_concepts = exist_fm.get("concepts", [])
+                        new_concepts = card_output.concepts or point.concepts
+                        for c in new_concepts:
+                            if c not in exist_concepts:
+                                exist_concepts.append(c)
+                        exist_fm["concepts"] = _truncate_list(exist_concepts, MAX_CARD_CONCEPTS)
+                        exist_fm["updated_at"] = datetime.now(UTC).isoformat()
+                        updated_card = serialize_frontmatter(exist_fm, exist_body)
+                        self.storage.write_file(
+                            str(Path(vault_path) / merge_target_path), updated_card
+                        )
+                        card_paths.append(merge_target_path)
+                        card_contents.append(updated_card)
+                        logger.info(
+                            "Semantic dedup: merged '%s' into existing %s",
+                            card_output.title,
+                            merge_target_path,
+                        )
+                        if self._current_result is not None:
+                            self._current_result.updated_files.append(merge_target_path)
+                        # Skip the rest of the card creation loop iteration
+                        continue
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to merge card '%s' into %s, creating new: %s",
+                            card_output.title,
+                            merge_target_path,
+                            e,
+                        )
+                        dedup_action = "create"
+
+                # If we reach here, action is "create" - proceed as before
+                logger.info("Semantic dedup: creating new card '%s'", card_output.title)
                 if card_truncated:
                     warning = f"Card '{point.card_title}' output was truncated after retry"
                     warnings.append(warning)
@@ -1162,12 +1382,67 @@ class WritePipeline:
                 self.storage.write_file(str(Path(vault_path) / card_rel_path), card_content)
                 card_paths.append(card_rel_path)
                 card_contents.append(card_content)
+
+                # Semantic index: update embedding for newly created card
+                if self.semantic_index and self._current_instance_id:
+                    try:
+                        self.semantic_index.add_note(
+                            self._current_instance_id,
+                            card_rel_path,
+                            title=card_output.title,
+                            summary=card_output.summary,
+                            concepts=card_output.concepts or point.concepts,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to update semantic index for card '%s' (non-critical): %s",
+                            card_output.title,
+                            e,
+                        )
+            except PipelineCancelledException:
+                raise
             except Exception as e:
                 failed_count += 1
                 message = f"Failed to generate card for '{point.card_title}': {e}"
                 logger.error(message)
                 if self._current_result is not None:
                     self._current_result.warnings.append(message)
+
+                error_text = str(e).lower()
+                fatal_error = any(
+                    marker in error_text for marker in FATAL_CARD_GENERATION_MARKERS
+                )
+                failure_ratio = failed_count / total_count if total_count else 1.0
+
+                if fatal_error or failure_ratio > MAX_STEP5_CARD_FAILURE_RATIO:
+                    self._last_card_generation_status = _resolve_card_generation_status(
+                        failed_count=failed_count,
+                        total_count=total_count,
+                        fatal_error=fatal_error,
+                    )
+                    stop_message = (
+                        f"Card generation stopped for '{point.card_title}' because "
+                        f"the failure ratio reached {failure_ratio:.0%}"
+                    )
+                    logger.warning(stop_message)
+                    if self._current_result is not None:
+                        self._current_result.warnings.append(stop_message)
+                    break
+
+                if not _should_allow_draft_fallback(
+                    failed_count=failed_count,
+                    total_count=total_count,
+                    draft_count=draft_count,
+                ):
+                    skip_message = (
+                        f"Draft fallback skipped for '{point.card_title}' because "
+                        f"the draft limit ({MAX_DRAFT_FALLBACK_CARDS}) was reached"
+                    )
+                    logger.warning(skip_message)
+                    if self._current_result is not None:
+                        self._current_result.warnings.append(skip_message)
+                    continue
+
                 try:
                     draft_path, draft_content = self._write_draft_card(
                         vault_path=vault_path,
@@ -1195,23 +1470,23 @@ class WritePipeline:
                     if self._current_result is not None:
                         self._current_result.warnings.append(draft_message)
 
-        # PIT-14: Mark partial_failed when all cards fail
+        self._last_card_generation_status = _resolve_card_generation_status(
+            failed_count=failed_count,
+            total_count=total_count,
+            fatal_error=fatal_error,
+        )
+
+        # PIT-14: Mark partial_failed when card generation is incomplete.
         if failed_count > 0:
             if self._current_result is not None:
                 self._current_result.status = "partial_failed"
-            if failed_count == total_count:
-                logger.warning(
-                    "All %d card LLM generations failed; %d draft fallback card(s) generated",
-                    total_count,
-                    draft_count,
-                )
-            else:
-                logger.warning(
-                    "%d/%d card LLM generations failed; %d draft fallback card(s) generated",
-                    failed_count,
-                    total_count,
-                    draft_count,
-                )
+            logger.warning(
+                "%d/%d card LLM generations failed; %d draft fallback card(s) generated; status=%s",
+                failed_count,
+                total_count,
+                draft_count,
+                self._last_card_generation_status,
+            )
 
         return card_paths, card_contents
 
@@ -1622,12 +1897,46 @@ class WritePipeline:
             relations = extract_all_relations(body, fm, card_path, vault_path, self.storage)
             all_relations.extend(relations)
 
+            # Semantic index: update embedding for each card
+            if self.semantic_index:
+                try:
+                    self.semantic_index.add_note(
+                        instance_id,
+                        card_path,
+                        title=fm.get("title", Path(card_path).stem),
+                        summary=body[:200] if body else "",
+                        concepts=fm.get("concepts", []),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to update semantic index for card %s (non-critical): %s",
+                        card_path,
+                        e,
+                    )
+
         if map_path:
             map_content = self.storage.read_file(str(Path(vault_path) / map_path))
             self.indexer.index_note(instance_id, map_path, map_content)
             fm, body = parse_frontmatter(map_content)
             relations = extract_all_relations(body, fm, map_path, vault_path, self.storage)
             all_relations.extend(relations)
+
+            # Semantic index: update embedding for map
+            if self.semantic_index:
+                try:
+                    self.semantic_index.add_note(
+                        instance_id,
+                        map_path,
+                        title=fm.get("title", Path(map_path).stem),
+                        summary=body[:200] if body else "",
+                        concepts=fm.get("concepts", []),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "Failed to update semantic index for map %s (non-critical): %s",
+                        map_path,
+                        e,
+                    )
 
         # Fix unresolved direct_link targets: resolve concept titles to card file paths
         concept_map = _build_concept_path_map(card_paths, card_contents)
@@ -1667,6 +1976,23 @@ class WritePipeline:
         updated_source = serialize_frontmatter(source_fm, source_body)
         self.storage.write_file(str(Path(vault_path) / source_path), updated_source)
         self.indexer.index_note(instance_id, source_path, updated_source)
+
+        # Semantic index: update embedding for source note
+        if self.semantic_index:
+            try:
+                self.semantic_index.add_note(
+                    instance_id,
+                    source_path,
+                    title=source_fm.get("doc_title", Path(source_path).stem),
+                    summary=source_fm.get("doc_summary", ""),
+                    concepts=source_fm.get("concepts", []),
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to update semantic index for source %s (non-critical): %s",
+                    source_path,
+                    e,
+                )
         if map_path:
             map_content = self.storage.read_file(str(Path(vault_path) / map_path))
             self.indexer.index_note(instance_id, map_path, map_content)

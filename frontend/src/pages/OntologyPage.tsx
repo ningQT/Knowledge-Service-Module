@@ -437,8 +437,12 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t('form.entityType')}</SelectItem>
-            {types.map((tp) => <SelectItem key={tp.id} value={tp.id}>{tp.name}</SelectItem>)}
+            <SelectItem value="all">{t('form.allEntityTypes')}</SelectItem>
+            {types.length === 0 ? (
+              <SelectItem value="__no_types__" disabled>{t('form.noEntityTypes')}</SelectItem>
+            ) : (
+              types.map((tp) => <SelectItem key={tp.id} value={tp.id}>{tp.name}</SelectItem>)
+            )}
           </SelectContent>
         </Select>
         <Button onClick={openCreate}><Plus className="h-4 w-4" />{t('actions.create')}</Button>

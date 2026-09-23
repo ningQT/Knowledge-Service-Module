@@ -42,6 +42,8 @@
     "name": "Name",
     "description": "Description",
     "entityType": "Entity Type",
+    "allEntityTypes": "All types",
+    "noEntityTypes": "No entity types",
     "entityTypeUnset": "No Type",
     "relationType": "Relation Type",
     "sourceEntity": "Source Entity",

@@ -85,7 +85,7 @@ export interface InstanceDiagnostics {
 export interface IngestStep {
   step: number
   name: string
-  status: 'pending' | 'running' | 'completed' | 'failed'
+  status: 'pending' | 'running' | 'completed' | 'completed_with_warnings' | 'failed'
   summary?: Record<string, unknown>
 }
 

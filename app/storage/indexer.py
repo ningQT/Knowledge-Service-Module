@@ -109,7 +109,14 @@ class Indexer:
         return note_id
 
     def remove_note(self, instance_id: str, file_path: str) -> None:
-        """Remove a note from the index."""
+        """Remove a note from the index.
+
+        TODO: This method does not clean up the note_embeddings table because the
+        Indexer does not have access to SemanticIndex. This can lead to orphaned
+        embeddings in note_embeddings for deleted notes. A callback mechanism or
+        shared reference to SemanticIndex should be added to ensure embeddings are
+        cleaned up when notes are removed.
+        """
         existing = self.db.execute(
             "SELECT id, title, search_text FROM notes WHERE instance_id = ? AND file_path = ?",
             (instance_id, file_path),
