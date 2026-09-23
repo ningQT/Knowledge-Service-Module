@@ -87,7 +87,8 @@ def get_ingest_service_for_background() -> tuple[IngestService, SQLiteBackend]:
     db = SQLiteBackend(
         db_path,
         backup_dir=settings.db_backup_dir,
-        backup_before_migration=settings.backup_before_migration,
+        # 后台连接只复用已初始化的 schema，避免每次任务重复生成迁移备份。
+        backup_before_migration=False,
     )
     db.init_schema()
     storage = LocalStorageBackend(settings.data_dir)

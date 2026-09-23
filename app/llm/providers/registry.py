@@ -36,6 +36,7 @@ class ModelProviderConfig:
     model: str
     api_key: str
     base_url: str = ""
+    max_retries: int = 0
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "ModelProviderConfig":
@@ -44,6 +45,7 @@ class ModelProviderConfig:
             model=(settings.llm_model or "").strip(),
             api_key=(settings.llm_api_key or "").strip(),
             base_url=(settings.llm_base_url or "").strip().rstrip("/"),
+            max_retries=settings.llm_max_retries,
         )
 
 
@@ -91,6 +93,7 @@ def _build_openai_chat_model(config: ModelProviderConfig, descriptor: ProviderDe
         api_key=config.api_key or None,
         base_url=_base_url(config, descriptor),
     )
+    provider.client.max_retries = config.max_retries
     return OpenAIChatModel(config.model, provider=provider)
 
 

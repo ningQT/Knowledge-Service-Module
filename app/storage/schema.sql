@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS ingest_jobs /* 写入任务状态表 */ (
 );
 
 -- FTS5 全文索引（external content table + trigram tokenizer 支持中文子串匹配）
--- Reference: 详细设计文档 §9.3 R-07: 查询用子查询而非 JOIN
+-- Reference: 详细设计文档 §9.3 R-07: FTS 匹配须封装在子查询/派生表内，不得直接把 notes_fts 作为 JOIN 左表回表
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts /* FTS5 trigram 全文检索表 */ USING fts5(
     title /* 笔记标题全文索引列 */,
     search_text /* 标题、正文关键内容与结构化元数据的组合索引文本 */,

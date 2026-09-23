@@ -359,7 +359,6 @@ async def _run_ingest_background(
     def _execute():
         db = None
         try:
-            svc, db = get_ingest_service_for_background()
             # 设计文档 §885: 后台线程创建独立的 SQLiteBackend 实例，不复用缓存的单例
             svc, db = get_ingest_service_for_background()
             with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as tmp:

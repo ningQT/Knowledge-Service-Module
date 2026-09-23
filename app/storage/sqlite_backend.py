@@ -3,9 +3,8 @@
 import json
 import logging
 import sqlite3
-import shutil
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from contextlib import contextmanager
 from pathlib import Path
 from collections.abc import Iterator
@@ -35,6 +34,8 @@ class SQLiteBackend(DatabaseBackend):
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA foreign_keys=ON")
+        # 后台写入与前台请求并发时，短暂锁冲突应等待而不是立即失败。
+        self.conn.execute("PRAGMA busy_timeout=5000")
 
     def execute(self, sql: str, params: tuple | list | None = None) -> list[dict[str, Any]]:
         with self._lock:
@@ -107,13 +108,16 @@ class SQLiteBackend(DatabaseBackend):
             return None
         backup_root = Path(self.backup_dir) if self.backup_dir else source.parent / "backups"
         backup_root.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        # 使用微秒级时间戳，避免同一秒内重复备份相互覆盖。
+        stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
         target = backup_root / f"{source.stem}-{stamp}.db"
-        shutil.copy2(source, target)
-        for suffix in ("-wal", "-shm"):
-            sidecar = Path(f"{source}{suffix}")
-            if sidecar.exists():
-                shutil.copy2(sidecar, backup_root / f"{source.stem}-{stamp}.db{suffix}")
+        # SQLite 在线备份在连接层生成一致性快照，不直接复制活动 WAL/SHM 文件。
+        backup_conn = sqlite3.connect(target)
+        try:
+            self.conn.backup(backup_conn)
+        finally:
+            # sqlite3.Connection 的上下文管理器不会关闭连接，必须显式释放文件句柄。
+            backup_conn.close()
         return str(target)
 
     def _record_schema_migration(self, version: str, description: str) -> None:
@@ -299,9 +303,20 @@ class SQLiteBackend(DatabaseBackend):
         layer: int | None = None,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        """FTS5 search using the external-content table with a subquery pattern.
+        """FTS5 检索，按 bm25() 相关度降序返回（同分按入库序）。
 
-        Reference: 详细设计文档 §9.3 R-07: FTS 必须用子查询，不能用 JOIN
+        返回字段与改造前逐项一致（10 项），bm25 分数仅用于内部排序、不作为返回列。
+
+        Reference: 详细设计文档 §9.3 R-07: FTS 匹配须封装在子查询/派生表内，
+        不得直接把 notes_fts 作为 JOIN 左表回表
+
+        实现要点：
+        1. 用「派生表携带 bm25()」形态——要把 FTS 匹配关进派生表先算出
+           「命中集 + 分数」，再按 rowid 回表。不能用 `n.id IN (SELECT rowid ...)`
+           子查询：该形态下 bm25() 作用域不可及（实测报 no such column: notes_fts）。
+        2. bm25() 返回负值，故 ASC 才是「相关度从高到低」；写成 DESC 会把最不相关的排在最前。
+        3. LIMIT 在 ORDER BY 之后生效，被截断掉的是最不相关的条目，
+           而非改造前那样丢掉入库较晚的条目。
         """
         placeholders = ",".join("?" * len(instance_ids))
 
@@ -310,10 +325,12 @@ class SQLiteBackend(DatabaseBackend):
                 SELECT n.instance_id, n.file_path, n.title, n.graph_layer, n.graph_role,
                        n.domain, n.kind, n.verification, n.frontmatter, n.type
                 FROM notes n
-                WHERE n.id IN (SELECT rowid FROM notes_fts WHERE notes_fts MATCH ?)
-                  AND n.instance_id IN ({placeholders})
+                JOIN (SELECT rowid AS rid, bm25(notes_fts) AS rank
+                        FROM notes_fts WHERE notes_fts MATCH ?) ft
+                  ON ft.rid = n.id
+                WHERE n.instance_id IN ({placeholders})
                   AND n.graph_layer = ?
-                ORDER BY n.id
+                ORDER BY ft.rank ASC, n.id ASC
                 LIMIT ?
             """
             params = [query, *instance_ids, layer, limit]
@@ -322,9 +339,11 @@ class SQLiteBackend(DatabaseBackend):
                 SELECT n.instance_id, n.file_path, n.title, n.graph_layer, n.graph_role,
                        n.domain, n.kind, n.verification, n.frontmatter, n.type
                 FROM notes n
-                WHERE n.id IN (SELECT rowid FROM notes_fts WHERE notes_fts MATCH ?)
-                  AND n.instance_id IN ({placeholders})
-                ORDER BY n.id
+                JOIN (SELECT rowid AS rid, bm25(notes_fts) AS rank
+                        FROM notes_fts WHERE notes_fts MATCH ?) ft
+                  ON ft.rid = n.id
+                WHERE n.instance_id IN ({placeholders})
+                ORDER BY ft.rank ASC, n.id ASC
                 LIMIT ?
             """
             params = [query, *instance_ids, limit]
@@ -339,19 +358,30 @@ class SQLiteBackend(DatabaseBackend):
         layer: int | None = None,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        """Experimental BM25/rank query for offline evaluation only."""
+        """FTS5 检索，按 bm25() 相关度降序返回（同分按 id 升序）。
+
+        与 fts_search 共用同一派生表形态，但额外返回 bm25() 分数列。
+        作为相关度排序的参考实现保留。
+
+        Reference: 详细设计文档 §9.3 R-07: FTS 匹配须封装在子查询/派生表内，
+        不得直接把 notes_fts 作为 JOIN 左表回表
+        """
         placeholders = ",".join("?" * len(instance_ids))
         layer_sql = "AND n.graph_layer = ?" if layer is not None else ""
+        # 派生表形态：先由 FTS 索引求出「命中 rowid + bm25 分数」，再按 rowid 回表。
+        # 不可写成 FROM notes_fts JOIN notes（R-07）：那样会让 FTS 成为 JOIN 左表，
+        # 查询计划退化为对 notes 的全表探测。
         sql = f"""
             SELECT n.instance_id, n.file_path, n.title, n.graph_layer, n.graph_role,
                    n.domain, n.kind, n.verification, n.frontmatter, n.type,
-                   bm25(notes_fts) AS rank
-            FROM notes_fts
-            JOIN notes n ON n.id = notes_fts.rowid
-            WHERE notes_fts MATCH ?
-              AND n.instance_id IN ({placeholders})
+                   ft.rank
+            FROM notes n
+            JOIN (SELECT rowid AS rid, bm25(notes_fts) AS rank
+                    FROM notes_fts WHERE notes_fts MATCH ?) ft
+              ON ft.rid = n.id
+            WHERE n.instance_id IN ({placeholders})
               {layer_sql}
-            ORDER BY rank
+            ORDER BY ft.rank ASC, n.id ASC
             LIMIT ?
         """
         params: list[Any] = [query, *instance_ids]

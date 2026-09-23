@@ -1,8 +1,10 @@
+import { useEffect } from 'react'
 import { LogOut, Moon, Sun, Languages, UserCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useTheme } from '@/hooks/useTheme'
 import { useLanguage } from '@/hooks/useLanguage'
 import { logout } from '@/services/auth'
+import { listInstances } from '@/services/instances'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useInstanceStore } from '@/stores/useInstanceStore'
 import type { Instance } from '@/types/api'
@@ -16,6 +18,23 @@ export function AppHeader() {
   const { instances, instanceId, setInstanceId, setInstances } = useInstanceStore()
   const navigate = useNavigate()
   const { t } = useTranslation('layout')
+
+  useEffect(() => {
+    if (instances.length > 0) return
+    let cancelled = false
+    listInstances()
+      .then((list) => {
+        if (cancelled) return
+        setInstances(list)
+        if (instanceId && !list.some((item) => item.id === instanceId)) {
+          setInstanceId(null)
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load instances:', error)
+      })
+    return () => { cancelled = true }
+  }, [instanceId, instances.length, setInstanceId, setInstances])
 
   async function handleLogout() {
     try {

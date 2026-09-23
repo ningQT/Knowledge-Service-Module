@@ -66,6 +66,7 @@ class LLMClient:
                 model_settings=ModelSettings(
                     max_tokens=effective_max_tokens,
                     temperature=temperature if temperature is not None else self.temperature,
+                    timeout=self.settings.llm_request_timeout_seconds,
                 ),
             )
             for attempt in range(2):
@@ -75,7 +76,7 @@ class LLMClient:
                     result = LLMResult(
                         content=run.output,
                         finish_reason=_finish_reason(run),
-                        usage=_token_usage(run.usage()),
+                        usage=_token_usage(run.usage),
                         model=self.model,
                         id="",
                     )

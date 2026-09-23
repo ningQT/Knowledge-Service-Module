@@ -130,6 +130,12 @@ STEP2_MAX_TOC_HEADINGS = 30
 STEP2_MAX_TOC_CHARS = 1500
 FREE_TEXT_WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]")
 STEP7_ALLOWED_RELATION_TYPES = {"dependency", "comparison", "composition", "extension"}
+MAX_DRAFT_FALLBACK_CARDS = 2
+MAX_STEP5_CARD_FAILURE_RATIO = 0.30
+FATAL_CARD_GENERATION_MARKERS = (
+    "cannot schedule new futures after shutdown",
+    "event loop is closed",
+)
 
 
 @dataclass
@@ -221,6 +227,68 @@ def _db_transaction(db: DatabaseBackend):
     return transaction() if callable(transaction) else nullcontext()
 
 
+def _resolve_step6_status(map_path: str | None, failure_message: str | None) -> str:
+    """解析 Step 6 的步骤状态。
+
+    Args:
+        map_path: 生成成功的知识地图路径。
+        failure_message: 地图生成失败时记录的错误信息。
+
+    Returns:
+        成功时返回 ``completed``，失败时返回 ``failed``。
+    """
+    if map_path:
+        return "completed"
+    return "failed" if failure_message else "completed"
+
+
+def _resolve_card_generation_status(
+    *,
+    failed_count: int,
+    total_count: int,
+    fatal_error: bool = False,
+) -> str:
+    """解析 Step 5 卡片生成的步骤状态。
+
+    Args:
+        failed_count: 生成失败的知识点数量。
+        total_count: 本次尝试生成的知识点总数。
+        fatal_error: 是否遇到不可恢复的执行器错误。
+
+    Returns:
+        ``completed``、``completed_with_warnings`` 或 ``failed``。
+    """
+    if failed_count <= 0:
+        return "completed"
+    if fatal_error or total_count <= 0:
+        return "failed"
+    failure_ratio = failed_count / total_count
+    if failure_ratio > MAX_STEP5_CARD_FAILURE_RATIO:
+        return "failed"
+    return "completed_with_warnings"
+
+
+def _should_allow_draft_fallback(
+    *,
+    failed_count: int,
+    total_count: int,
+    draft_count: int,
+) -> bool:
+    """判断当前失败点是否允许写入 draft 卡片。
+
+    Args:
+        failed_count: 当前累计失败数。
+        total_count: 知识点总数。
+        draft_count: 已生成的 draft 卡片数。
+
+    Returns:
+        允许生成时返回 ``True``。
+    """
+    if total_count <= 0 or draft_count >= MAX_DRAFT_FALLBACK_CARDS:
+        return False
+    return failed_count / total_count <= MAX_STEP5_CARD_FAILURE_RATIO
+
+
 class WritePipeline:
     """Phase-two knowledge write pipeline."""
 
@@ -244,6 +312,7 @@ class WritePipeline:
         self._current_result: IngestResult | None = None
         self._last_raw_path: str | None = None
         self._last_llm_truncated: bool = False
+        self._last_card_generation_status: str = "completed"
         self._current_instance_id: str | None = None
         self._dedup: Any = None  # Lazy-initialized SemanticDeduplicator
 
@@ -372,10 +441,11 @@ class WritePipeline:
                 model_settings=ModelSettings(
                     max_tokens=max_tokens,
                     temperature=self.settings.llm_temperature,
+                    timeout=self.settings.llm_request_timeout_seconds,
                 ),
             )
             finish_reason = _finish_reason_value(getattr(result.response, "finish_reason", ""))
-            usage = result.usage()
+            usage = result.usage
             usage_counts = _usage_counts(usage)
             log_event(
                 logger,
@@ -589,7 +659,7 @@ class WritePipeline:
                 card_paths, card_contents = self._step5_generate_cards(
                     vault_path, markdown, classification, filter_result, source_path, language_instruction
                 )
-                _cb(5, "completed", {
+                _cb(5, self._last_card_generation_status, {
                     "card_count": len(card_paths),
                     "card_titles": [Path(p).stem for p in card_paths],
                 })
@@ -609,7 +679,7 @@ class WritePipeline:
                 card_paths, card_contents = self._phase3_knowledge_extract(
                     vault_path, markdown, doc_structure, classification, knowledge_map, source_path, language_instruction
                 )
-                _cb(5, "completed", {
+                _cb(5, self._last_card_generation_status, {
                     "card_count": len(card_paths),
                     "card_titles": [Path(p).stem for p in card_paths],
                 })
@@ -627,6 +697,7 @@ class WritePipeline:
                     _cb(6, "completed", {"map_title": None, "core_concepts_count": 0})
                 else:
                     logger.info("Step 6: knowledge map v2 (FR-06 forced output)")
+                    warnings_before = len(result.warnings)
                     map_path, map_content = self._step6_generate_map_v2(
                         vault_path,
                         classification,
@@ -644,7 +715,22 @@ class WritePipeline:
                             "core_concepts_count": len(classification.topics),
                         })
                     else:
-                        _cb(6, "completed", {"map_title": None, "core_concepts_count": 0})
+                        failure_message = (
+                            result.warnings[-1]
+                            if len(result.warnings) > warnings_before
+                            else None
+                        )
+                        summary: dict[str, object] = {
+                            "map_title": None,
+                            "core_concepts_count": 0,
+                        }
+                        if failure_message:
+                            summary["error"] = failure_message
+                        _cb(
+                            6,
+                            _resolve_step6_status(map_path, failure_message),
+                            summary,
+                        )
             else:
                 _cb(6, "completed", {"skipped": True})
 
@@ -1108,6 +1194,8 @@ class WritePipeline:
         failed_count = 0
         draft_count = 0
         total_count = len(points)
+        fatal_error = False
+        self._last_card_generation_status = "completed"
 
         for point in points:
             context = fast_context
@@ -1311,12 +1399,50 @@ class WritePipeline:
                             card_output.title,
                             e,
                         )
+            except PipelineCancelledException:
+                raise
             except Exception as e:
                 failed_count += 1
                 message = f"Failed to generate card for '{point.card_title}': {e}"
                 logger.error(message)
                 if self._current_result is not None:
                     self._current_result.warnings.append(message)
+
+                error_text = str(e).lower()
+                fatal_error = any(
+                    marker in error_text for marker in FATAL_CARD_GENERATION_MARKERS
+                )
+                failure_ratio = failed_count / total_count if total_count else 1.0
+
+                if fatal_error or failure_ratio > MAX_STEP5_CARD_FAILURE_RATIO:
+                    self._last_card_generation_status = _resolve_card_generation_status(
+                        failed_count=failed_count,
+                        total_count=total_count,
+                        fatal_error=fatal_error,
+                    )
+                    stop_message = (
+                        f"Card generation stopped for '{point.card_title}' because "
+                        f"the failure ratio reached {failure_ratio:.0%}"
+                    )
+                    logger.warning(stop_message)
+                    if self._current_result is not None:
+                        self._current_result.warnings.append(stop_message)
+                    break
+
+                if not _should_allow_draft_fallback(
+                    failed_count=failed_count,
+                    total_count=total_count,
+                    draft_count=draft_count,
+                ):
+                    skip_message = (
+                        f"Draft fallback skipped for '{point.card_title}' because "
+                        f"the draft limit ({MAX_DRAFT_FALLBACK_CARDS}) was reached"
+                    )
+                    logger.warning(skip_message)
+                    if self._current_result is not None:
+                        self._current_result.warnings.append(skip_message)
+                    continue
+
                 try:
                     draft_path, draft_content = self._write_draft_card(
                         vault_path=vault_path,
@@ -1344,23 +1470,23 @@ class WritePipeline:
                     if self._current_result is not None:
                         self._current_result.warnings.append(draft_message)
 
-        # PIT-14: Mark partial_failed when all cards fail
+        self._last_card_generation_status = _resolve_card_generation_status(
+            failed_count=failed_count,
+            total_count=total_count,
+            fatal_error=fatal_error,
+        )
+
+        # PIT-14: Mark partial_failed when card generation is incomplete.
         if failed_count > 0:
             if self._current_result is not None:
                 self._current_result.status = "partial_failed"
-            if failed_count == total_count:
-                logger.warning(
-                    "All %d card LLM generations failed; %d draft fallback card(s) generated",
-                    total_count,
-                    draft_count,
-                )
-            else:
-                logger.warning(
-                    "%d/%d card LLM generations failed; %d draft fallback card(s) generated",
-                    failed_count,
-                    total_count,
-                    draft_count,
-                )
+            logger.warning(
+                "%d/%d card LLM generations failed; %d draft fallback card(s) generated; status=%s",
+                failed_count,
+                total_count,
+                draft_count,
+                self._last_card_generation_status,
+            )
 
         return card_paths, card_contents
 

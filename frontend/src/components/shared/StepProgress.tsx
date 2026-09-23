@@ -1,4 +1,4 @@
-import { Clock, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { AlertTriangle, Clock, Loader2, CheckCircle, XCircle } from 'lucide-react'
 import type { IngestStep } from '@/types/api'
 import { formatJobStatus } from '@/lib/i18nFormat'
 import { useTranslation } from 'react-i18next'
@@ -7,6 +7,7 @@ const statusColors: Record<string, string> = {
   pending: 'bg-muted',
   running: 'bg-info animate-pulse',
   completed: 'bg-success',
+  completed_with_warnings: 'bg-warning',
   failed: 'bg-error',
 }
 
@@ -14,6 +15,7 @@ const statusIcons: Record<string, React.ReactNode> = {
   pending: <Clock className="w-4 h-4 text-muted-foreground" />,
   running: <Loader2 className="w-4 h-4 text-info animate-spin" />,
   completed: <CheckCircle className="w-4 h-4 text-success" />,
+  completed_with_warnings: <AlertTriangle className="w-4 h-4 text-warning" />,
   failed: <XCircle className="w-4 h-4 text-error" />,
 }
 
@@ -34,7 +36,12 @@ export function StepProgress({ step }: { step: IngestStep }) {
           <div
             className={`h-full rounded-full transition-all ${statusColors[step.status]}`}
             style={{
-              width: step.status === 'completed' ? '100%' : step.status === 'running' ? '60%' : '0%',
+              width:
+                step.status === 'completed' || step.status === 'completed_with_warnings'
+                  ? '100%'
+                  : step.status === 'running'
+                    ? '60%'
+                    : '0%',
             }}
           />
         </div>

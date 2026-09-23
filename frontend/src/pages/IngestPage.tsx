@@ -11,8 +11,10 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { formatApiError, formatJobStatus } from '@/lib/i18nFormat'
+import { ApiError, formatApiError, formatJobStatus } from '@/lib/i18nFormat'
 import { useTranslation } from 'react-i18next'
+
+const ACTIVE_JOB_STATUSES = new Set(['pending', 'running'])
 
 export default function IngestPage() {
   const { instanceId } = useInstanceStore()
@@ -29,7 +31,19 @@ export default function IngestPage() {
     getInstance(instanceId).then(setCurrentInstance).catch(() => setCurrentInstance(null))
     return () => { cancelled = true }
   }, [instanceId])
-  const { currentJobId, status, steps, result, setJobId, updateStep, setResult, cancel, reset } = useIngestStore()
+  const {
+    currentJobId,
+    jobInstanceId,
+    status,
+    steps,
+    result,
+    setJobId,
+    restoreJob,
+    updateStep,
+    setResult,
+    cancel,
+    reset,
+  } = useIngestStore()
   const [file, setFile] = useState<File | null>(null)
   const [domainHint, setDomainHint] = useState('')
   const [autoMap, setAutoMap] = useState(true)
@@ -43,7 +57,10 @@ export default function IngestPage() {
   const pollingRef = useRef(false)
   const uploadDisabled = !instanceId || submitting || status === 'running'
 
-  const sseUrl = currentJobId && instanceId ? getJobSSEUrl(instanceId, currentJobId) : null
+  const sseUrl =
+    currentJobId && instanceId && jobInstanceId === instanceId && ACTIVE_JOB_STATUSES.has(status)
+      ? getJobSSEUrl(instanceId, currentJobId)
+      : null
 
   useSSE(sseUrl, {
     resolveUrl: async (url) => {
@@ -65,7 +82,7 @@ export default function IngestPage() {
     },
     onError: () => {
       // SSE 连接失败，切换到轮询回退（设计文档 §4.7.3 功能 #8）
-      if (currentJobId && instanceId && status === 'running') {
+      if (currentJobId && instanceId && jobInstanceId === instanceId && status === 'running') {
         pollingRef.current = true
         setPolling(true)
       }
@@ -74,7 +91,7 @@ export default function IngestPage() {
 
   // S-04: 轮询回退逻辑
   useEffect(() => {
-    if (!polling || !currentJobId || !instanceId) return
+    if (!polling || !currentJobId || !instanceId || jobInstanceId !== instanceId) return
 
     const interval = setInterval(async () => {
       try {
@@ -82,7 +99,11 @@ export default function IngestPage() {
 
         // 更新步骤状态
         for (const step of job.steps) {
-          if (step.status === 'completed' || step.status === 'failed') {
+          if (
+            step.status === 'completed' ||
+            step.status === 'completed_with_warnings' ||
+            step.status === 'failed'
+          ) {
             updateStep(step.step, step.status, step.summary)
           }
         }
@@ -110,7 +131,28 @@ export default function IngestPage() {
     }, 2000)
 
     return () => clearInterval(interval)
-  }, [polling, currentJobId, instanceId, updateStep, setResult, cancel])
+  }, [polling, currentJobId, instanceId, jobInstanceId, updateStep, setResult, cancel])
+
+  useEffect(() => {
+    if (!currentJobId || !instanceId || jobInstanceId !== instanceId) return
+    let cancelled = false
+    getJob(instanceId, currentJobId)
+      .then((job) => {
+        if (!cancelled) restoreJob(job)
+      })
+      .catch((e) => {
+        if (!cancelled && e instanceof ApiError && e.status === 404) {
+          reset()
+        }
+      })
+    return () => { cancelled = true }
+  }, [currentJobId, instanceId, jobInstanceId, reset, restoreJob])
+
+  useEffect(() => {
+    if (currentJobId && jobInstanceId && instanceId && jobInstanceId !== instanceId) {
+      reset()
+    }
+  }, [currentJobId, instanceId, jobInstanceId, reset])
 
   const handleSubmit = useCallback(async () => {
     if (!file || !instanceId) return
@@ -121,7 +163,7 @@ export default function IngestPage() {
         domain_hint: domainHint || undefined,
         auto_map: autoMap,
       })
-      setJobId(job_id)
+      setJobId(job_id, instanceId)
     } catch (e) {
       setError(formatApiError(t, e))
     }
@@ -138,7 +180,7 @@ export default function IngestPage() {
   }, [uploadDisabled])
 
   const handleCancel = useCallback(async () => {
-    if (!currentJobId || !instanceId) return
+    if (!currentJobId || !instanceId || jobInstanceId !== instanceId) return
     setCancelling(true)
     try {
       await cancelJob(instanceId, currentJobId)
@@ -149,7 +191,7 @@ export default function IngestPage() {
     }
     setCancelling(false)
     setCancelOpen(false)
-  }, [currentJobId, instanceId, cancel])
+  }, [currentJobId, instanceId, jobInstanceId, cancel])
 
   return (
     <div className="max-w-4xl space-y-6">

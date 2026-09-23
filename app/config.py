@@ -46,6 +46,13 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="gpt-4o", alias="KSM_LLM_MODEL")
     llm_temperature: float = Field(default=0.3, alias="KSM_LLM_TEMPERATURE")
     llm_max_tokens: int = Field(default=4096, alias="KSM_LLM_MAX_TOKENS")
+    llm_request_timeout_seconds: int = Field(
+        default=120,
+        ge=1,
+        le=1800,
+        alias="KSM_LLM_REQUEST_TIMEOUT_SECONDS",
+    )
+    llm_max_retries: int = Field(default=0, ge=0, le=5, alias="KSM_LLM_MAX_RETRIES")
 
     # Phase two reading and generation budgets.
     reading_budget_chars: int = Field(default=39000, alias="KSM_READING_BUDGET_CHARS")

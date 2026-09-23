@@ -56,9 +56,10 @@ def _agent(
         model_settings=ModelSettings(
             max_tokens=settings.llm_max_tokens,
             temperature=settings.llm_temperature,
+            timeout=settings.llm_request_timeout_seconds,
         ),
-        retries=1,
-        output_retries=output_retries,
+        # pydantic-ai 2.x 将工具与输出重试统一收敛到 retries 字典。
+        retries={"tools": 1, "output": output_retries},
     )
 
 
@@ -99,7 +100,7 @@ def create_step4_locate_agent(settings: Settings) -> Agent:
         settings,
         KnowledgeLocateResult,
         STEP4_LOCATE_INSTRUCTIONS,
-        output_retries=3,
+        output_retries=1,
     )
 
 

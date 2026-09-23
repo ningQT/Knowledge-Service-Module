@@ -1,8 +1,52 @@
 import { create } from 'zustand'
-import type { IngestStep } from '@/types/api'
+import type { IngestJob, IngestStep } from '@/types/api'
+
+const ACTIVE_JOB_STORAGE_KEY = 'ksm-active-ingest-job'
+
+interface StoredIngestJob {
+  jobId: string
+  instanceId: string
+}
+
+function readStoredJob(): StoredIngestJob | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(ACTIVE_JOB_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<StoredIngestJob>
+    if (typeof parsed.jobId !== 'string' || typeof parsed.instanceId !== 'string') return null
+    return { jobId: parsed.jobId, instanceId: parsed.instanceId }
+  } catch {
+    return null
+  }
+}
+
+function persistStoredJob(job: StoredIngestJob | null): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (job) {
+      window.sessionStorage.setItem(ACTIVE_JOB_STORAGE_KEY, JSON.stringify(job))
+    } else {
+      window.sessionStorage.removeItem(ACTIVE_JOB_STORAGE_KEY)
+    }
+  } catch {
+    // 浏览器未提供 sessionStorage 时，仅保留当前页面内存状态。
+  }
+}
+
+function mergeSteps(restoredSteps: IngestStep[]): IngestStep[] {
+  return initialSteps.map((step) => {
+    const restored = restoredSteps.find((item) => item.step === step.step)
+    return restored ? { ...step, ...restored } : step
+  })
+}
+
+const terminalStatuses = new Set(['success', 'partial_failed', 'failed', 'cancelled'])
+const storedJob = readStoredJob()
 
 interface IngestStore {
   currentJobId: string | null
+  jobInstanceId: string | null
   status: string
   steps: IngestStep[]
   result: {
@@ -12,7 +56,8 @@ interface IngestStore {
     generated_maps: string[]
     warnings: string[]
   } | null
-  setJobId: (id: string) => void
+  setJobId: (id: string, instanceId: string) => void
+  restoreJob: (job: IngestJob) => void
   updateStep: (step: number, status: string, summary?: Record<string, unknown>) => void
   setResult: (result: IngestStore['result']) => void
   cancel: () => void
@@ -26,11 +71,33 @@ const initialSteps: IngestStep[] = Array.from({ length: 8 }, (_, i) => ({
 }))
 
 export const useIngestStore = create<IngestStore>((set) => ({
-  currentJobId: null,
-  status: 'idle',
+  currentJobId: storedJob?.jobId ?? null,
+  jobInstanceId: storedJob?.instanceId ?? null,
+  status: storedJob ? 'running' : 'idle',
   steps: initialSteps,
   result: null,
-  setJobId: (id) => set({ currentJobId: id, status: 'running', steps: initialSteps, result: null }),
+  setJobId: (id, instanceId) => {
+    persistStoredJob({ jobId: id, instanceId })
+    set({ currentJobId: id, jobInstanceId: instanceId, status: 'running', steps: initialSteps, result: null })
+  },
+  restoreJob: (job) => {
+    persistStoredJob({ jobId: job.job_id, instanceId: job.instance_id })
+    set({
+      currentJobId: job.job_id,
+      jobInstanceId: job.instance_id,
+      status: job.status,
+      steps: mergeSteps(job.steps),
+      result: terminalStatuses.has(job.status)
+        ? {
+            status: job.status,
+            created_files: job.created_files,
+            generated_cards: job.generated_cards,
+            generated_maps: job.generated_maps,
+            warnings: job.warnings,
+          }
+        : null,
+    })
+  },
   updateStep: (step, status, summary) =>
     set((state) => ({
       steps: state.steps.map((s) =>
@@ -38,6 +105,24 @@ export const useIngestStore = create<IngestStore>((set) => ({
       ),
     })),
   setResult: (result) => set({ result, status: result?.status || 'completed' }),
-  cancel: () => set({ currentJobId: null, status: 'idle', steps: initialSteps, result: null }),
-  reset: () => set({ currentJobId: null, status: 'idle', steps: initialSteps, result: null }),
+  cancel: () => {
+    persistStoredJob(null)
+    set({
+      currentJobId: null,
+      jobInstanceId: null,
+      status: 'idle',
+      steps: initialSteps,
+      result: null,
+    })
+  },
+  reset: () => {
+    persistStoredJob(null)
+    set({
+      currentJobId: null,
+      jobInstanceId: null,
+      status: 'idle',
+      steps: initialSteps,
+      result: null,
+    })
+  },
 }))
