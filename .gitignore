@@ -39,7 +39,6 @@ tests
 
 # Spec Kit 与方案文档（本地持久化，不入版本库）
 task_plan/
-.specify
 spec/
 specs/
 .agents/
