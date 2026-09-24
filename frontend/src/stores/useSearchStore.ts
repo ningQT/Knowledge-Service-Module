@@ -14,6 +14,7 @@ interface SearchStore {
   error: string | null
   elapsedMs: number | undefined
   answerJobId: string | null
+  answerInstanceRevision: number | null
   answerStatus: string
   answerSteps: AnswerStep[]
   answerResult: AnswerResult | null
@@ -30,7 +31,7 @@ interface SearchStore {
   clearForInstance: (instanceId: string | null) => void
   resetSearch: () => void
   resetAnswer: () => void
-  setAnswerJobId: (jobId: string | null) => void
+  setAnswerJobId: (jobId: string | null, instanceRevision?: number | null) => void
   setAnswerStatus: (status: string) => void
   setAnswerSteps: (steps: Updater<AnswerStep[]>) => void
   setAnswerResult: (result: AnswerResult | null) => void
@@ -41,6 +42,7 @@ interface SearchStore {
 
 const answerInitialState = {
   answerJobId: null,
+  answerInstanceRevision: null,
   answerStatus: 'idle',
   answerSteps: [],
   answerResult: null,
@@ -91,7 +93,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
       ...answerInitialState,
     }),
   resetAnswer: () => set({ ...answerInitialState }),
-  setAnswerJobId: (answerJobId) => set({ answerJobId }),
+  setAnswerJobId: (answerJobId, instanceRevision = null) =>
+    set({ answerJobId, answerInstanceRevision: instanceRevision }),
   setAnswerStatus: (answerStatus) => set({ answerStatus }),
   setAnswerSteps: (answerSteps) =>
     set((state) => ({

@@ -178,30 +178,26 @@ def _load_lexicon_terms(dictionary: InstanceDictionary, db: DatabaseBackend) -> 
         canonical = str(row["canonical_term"]).strip()
         relation_type = row["relation_type"]
         variants = _load_json_list(row.get("variant_terms_json"))
-        layer = "exact" if relation_type == "alias" else "expanded"
-        _add_term(
-            dictionary,
-            term=canonical,
-            canonical=canonical,
-            layer="exact" if relation_type == "alias" else "phrase",
-            source=f"lexicon_{relation_type}",
-            relation_type=relation_type,
-        )
         values = {canonical, *variants}
         mapping = dictionary.alias_map if relation_type == "alias" else dictionary.synonym_map
         for left in values:
             for right in values:
                 if _term_key(left) != _term_key(right):
                     mapping.setdefault(_term_key(left), set()).add(right)
-            if relation_type == "alias":
-                _add_term(
-                    dictionary,
-                    term=left,
-                    canonical=canonical,
-                    layer=layer,
-                    source="lexicon_alias",
-                    relation_type=relation_type,
-                )
+
+            # 别名和同义词都必须注册主词与全部变体，确保短语从两个方向都能命中。
+            if _term_key(left) == _term_key(canonical):
+                layer = "exact" if relation_type == "alias" else "phrase"
+            else:
+                layer = "exact" if relation_type == "alias" else "expanded"
+            _add_term(
+                dictionary,
+                term=left,
+                canonical=canonical,
+                layer=layer,
+                source=f"lexicon_{relation_type}",
+                relation_type=relation_type,
+            )
 
 
 def _load_facet_terms(dictionary: InstanceDictionary, db: DatabaseBackend) -> None:

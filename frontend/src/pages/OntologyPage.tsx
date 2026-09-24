@@ -35,7 +35,7 @@ import {
   updateOntologyRelation,
   updateOntologyType,
 } from '@/services/ontology'
-import { useInstanceStore } from '@/stores/useInstanceStore'
+import { isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
 import type {
   OntologyAlias,
   OntologyEntity,
@@ -82,7 +82,9 @@ const STATUS_OPTIONS = ['active', 'candidate', 'deprecated'] as const
 
 function TypesTab({ instanceId }: { instanceId: string }) {
   const { t } = useTranslation(['ontology', 'common'])
+  const { instanceRevision } = useInstanceStore()
   const [types, setTypes] = useState<OntologyType[]>([])
+  const [typesRevision, setTypesRevision] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -95,87 +97,120 @@ function TypesTab({ instanceId }: { instanceId: string }) {
   const [pendingId, setPendingId] = useState<string | null>(null)
 
   const reload = useCallback(() => {
+    const requestRevision = instanceRevision
     setLoading(true)
     setError(null)
     listOntologyTypes(instanceId)
-      .then(setTypes)
-      .catch((e) => setError(formatApiError(t, e)))
-      .finally(() => setLoading(false))
-  }, [instanceId, t])
+      .then((data) => {
+        if (!isInstanceRevisionCurrent(requestRevision)) return
+        setTypes(data)
+        setTypesRevision(requestRevision)
+      })
+      .catch((e) => {
+        if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
+      })
+      .finally(() => {
+        if (isInstanceRevisionCurrent(requestRevision)) setLoading(false)
+      })
+  }, [instanceId, instanceRevision, t])
 
   useEffect(() => {
-    queueMicrotask(reload)
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setTypes([])
+      setTypesRevision(null)
+      setLoading(true)
+      setError(null)
+      setSaving(false)
+      setDialogOpen(false)
+      setEditing(null)
+      setDeleteTarget(null)
+      setDeleting(false)
+      setPendingId(null)
+      reload()
+    })
+    return () => { cancelled = true }
   }, [reload])
 
   const visible = useMemo(() => {
+    if (typesRevision !== instanceRevision) return []
     const q = query.trim().toLowerCase()
     if (!q) return types
     return types.filter((item) => item.name.toLowerCase().includes(q) || item.description.toLowerCase().includes(q))
-  }, [types, query])
+  }, [instanceRevision, query, types, typesRevision])
 
   const openCreate = () => { setEditing(null); setForm(emptyTypeForm); setDialogOpen(true); setError(null) }
   const openEdit = (item: OntologyType) => { setEditing(item); setForm({ name: item.name, description: item.description }); setDialogOpen(true); setError(null) }
 
   const save = async () => {
     if (saving) return
+    const requestRevision = instanceRevision
     setSaving(true)
     setError(null)
     try {
       const saved = editing
         ? await updateOntologyType(instanceId, editing.id, { name: form.name, description: form.description })
         : await createOntologyType(instanceId, { name: form.name, description: form.description })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setTypes((cur) => {
         const rest = cur.filter((item) => item.id !== saved.id)
         return [...rest, saved].sort((a, b) => a.name.localeCompare(b.name))
       })
       setDialogOpen(false)
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setSaving(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setSaving(false)
     }
   }
 
   const toggleSearchable = async (item: OntologyType) => {
     if (pendingId) return
+    const requestRevision = instanceRevision
     setPendingId(item.id)
     setError(null)
     try {
       const saved = await updateOntologyType(instanceId, item.id, { searchable: !item.searchable })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setTypes((cur) => cur.map((i) => (i.id === saved.id ? saved : i)))
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setPendingId(null)
+      if (isInstanceRevisionCurrent(requestRevision)) setPendingId(null)
     }
   }
 
   const toggleStatus = async (item: OntologyType, status: string) => {
     if (pendingId) return
+    const requestRevision = instanceRevision
     setPendingId(item.id)
     setError(null)
     try {
       const saved = await updateOntologyType(instanceId, item.id, { status })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setTypes((cur) => cur.map((i) => (i.id === saved.id ? saved : i)))
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setPendingId(null)
+      if (isInstanceRevisionCurrent(requestRevision)) setPendingId(null)
     }
   }
 
   const confirmDelete = async () => {
     if (!deleteTarget || deleting) return
+    const requestRevision = instanceRevision
     setDeleting(true)
     setError(null)
     try {
       await deleteOntologyType(instanceId, deleteTarget.id)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setTypes((cur) => cur.filter((i) => i.id !== deleteTarget.id))
       setDeleteTarget(null)
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setDeleting(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setDeleting(false)
     }
   }
 
@@ -265,7 +300,9 @@ function TypesTab({ instanceId }: { instanceId: string }) {
 
 function EntitiesTab({ instanceId }: { instanceId: string }) {
   const { t } = useTranslation(['ontology', 'common'])
+  const { instanceRevision } = useInstanceStore()
   const [entities, setEntities] = useState<OntologyEntity[]>([])
+  const [entitiesRevision, setEntitiesRevision] = useState<number | null>(null)
   const [types, setTypes] = useState<OntologyType[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -284,16 +321,46 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
   const [aliasSaving, setAliasSaving] = useState(false)
 
   const reload = useCallback(() => {
+    const requestRevision = instanceRevision
     setLoading(true)
     setError(null)
     Promise.all([listOntologyEntities(instanceId), listOntologyTypes(instanceId)])
-      .then(([ents, typs]) => { setEntities(ents); setTypes(typs) })
-      .catch((e) => setError(formatApiError(t, e)))
-      .finally(() => setLoading(false))
-  }, [instanceId, t])
+      .then(([ents, typs]) => {
+        if (!isInstanceRevisionCurrent(requestRevision)) return
+        setEntities(ents)
+        setTypes(typs)
+        setEntitiesRevision(requestRevision)
+      })
+      .catch((e) => {
+        if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
+      })
+      .finally(() => {
+        if (isInstanceRevisionCurrent(requestRevision)) setLoading(false)
+      })
+  }, [instanceId, instanceRevision, t])
 
   useEffect(() => {
-    queueMicrotask(reload)
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setEntities([])
+      setTypes([])
+      setEntitiesRevision(null)
+      setLoading(true)
+      setError(null)
+      setSaving(false)
+      setDialogOpen(false)
+      setEditing(null)
+      setDeleteTarget(null)
+      setDeleting(false)
+      setPendingId(null)
+      setExpandedId(null)
+      setAliases([])
+      setAliasText('')
+      setAliasSaving(false)
+      reload()
+    })
+    return () => { cancelled = true }
   }, [reload])
 
   const typeName = useCallback((typeId: string | null) => {
@@ -302,13 +369,14 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
   }, [types])
 
   const visible = useMemo(() => {
+    if (entitiesRevision !== instanceRevision) return []
     const q = query.trim().toLowerCase()
     return entities.filter((item) => {
       if (filterType !== 'all' && item.entity_type_id !== filterType) return false
       if (!q) return true
       return item.name.toLowerCase().includes(q) || item.description.toLowerCase().includes(q)
     })
-  }, [entities, filterType, query])
+  }, [entities, entitiesRevision, filterType, instanceRevision, query])
 
   const openCreate = () => { setEditing(null); setForm(emptyEntityForm); setDialogOpen(true); setError(null) }
   const openEdit = (item: OntologyEntity) => {
@@ -320,6 +388,7 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
 
   const save = async () => {
     if (saving) return
+    const requestRevision = instanceRevision
     setSaving(true)
     setError(null)
     try {
@@ -334,58 +403,65 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
             description: form.description,
             ...(form.entity_type_id ? { entity_type_id: form.entity_type_id } : {}),
           })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setEntities((cur) => {
         const rest = cur.filter((item) => item.id !== saved.id)
         return [...rest, saved].sort((a, b) => a.name.localeCompare(b.name))
       })
       setDialogOpen(false)
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setSaving(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setSaving(false)
     }
   }
 
   const toggleSearchable = async (item: OntologyEntity) => {
     if (pendingId) return
+    const requestRevision = instanceRevision
     setPendingId(item.id)
     setError(null)
     try {
       const saved = await updateOntologyEntity(instanceId, item.id, { searchable: !item.searchable })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setEntities((cur) => cur.map((i) => (i.id === saved.id ? saved : i)))
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setPendingId(null)
+      if (isInstanceRevisionCurrent(requestRevision)) setPendingId(null)
     }
   }
 
   const toggleStatus = async (item: OntologyEntity, status: string) => {
     if (pendingId) return
+    const requestRevision = instanceRevision
     setPendingId(item.id)
     setError(null)
     try {
       const saved = await updateOntologyEntity(instanceId, item.id, { status })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setEntities((cur) => cur.map((i) => (i.id === saved.id ? saved : i)))
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setPendingId(null)
+      if (isInstanceRevisionCurrent(requestRevision)) setPendingId(null)
     }
   }
 
   const confirmDelete = async () => {
     if (!deleteTarget || deleting) return
+    const requestRevision = instanceRevision
     setDeleting(true)
     setError(null)
     try {
       await deleteOntologyEntity(instanceId, deleteTarget.id)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setEntities((cur) => cur.filter((i) => i.id !== deleteTarget.id))
       setDeleteTarget(null)
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setDeleting(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setDeleting(false)
     }
   }
 
@@ -395,35 +471,41 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
       setAliases([])
       return
     }
+    const requestRevision = instanceRevision
     setExpandedId(entityId)
     try {
       const als = await listOntologyAliases(instanceId, entityId)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setAliases(als)
     } catch {
-      setAliases([])
+      if (isInstanceRevisionCurrent(requestRevision)) setAliases([])
     }
   }
 
   const addAlias = async (entityId: string) => {
     if (!aliasText.trim() || aliasSaving) return
+    const requestRevision = instanceRevision
     setAliasSaving(true)
     try {
       const created = await createOntologyAlias(instanceId, entityId, { alias_text: aliasText.trim() })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setAliases((cur) => [...cur, created])
       setAliasText('')
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setAliasSaving(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setAliasSaving(false)
     }
   }
 
   const removeAlias = async (entityId: string, aliasId: string) => {
+    const requestRevision = instanceRevision
     try {
       await deleteOntologyAlias(instanceId, entityId, aliasId)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setAliases((cur) => cur.filter((a) => a.id !== aliasId))
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     }
   }
 
@@ -558,7 +640,9 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
 
 function RelationsTab({ instanceId }: { instanceId: string }) {
   const { t } = useTranslation(['ontology', 'common'])
+  const { instanceRevision } = useInstanceStore()
   const [relations, setRelations] = useState<OntologyRelation[]>([])
+  const [relationsRevision, setRelationsRevision] = useState<number | null>(null)
   const [entities, setEntities] = useState<OntologyEntity[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -572,16 +656,42 @@ function RelationsTab({ instanceId }: { instanceId: string }) {
   const [pendingId, setPendingId] = useState<string | null>(null)
 
   const reload = useCallback(() => {
+    const requestRevision = instanceRevision
     setLoading(true)
     setError(null)
     Promise.all([listOntologyRelations(instanceId), listOntologyEntities(instanceId)])
-      .then(([rels, ents]) => { setRelations(rels); setEntities(ents) })
-      .catch((e) => setError(formatApiError(t, e)))
-      .finally(() => setLoading(false))
-  }, [instanceId, t])
+      .then(([rels, ents]) => {
+        if (!isInstanceRevisionCurrent(requestRevision)) return
+        setRelations(rels)
+        setEntities(ents)
+        setRelationsRevision(requestRevision)
+      })
+      .catch((e) => {
+        if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
+      })
+      .finally(() => {
+        if (isInstanceRevisionCurrent(requestRevision)) setLoading(false)
+      })
+  }, [instanceId, instanceRevision, t])
 
   useEffect(() => {
-    queueMicrotask(reload)
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setRelations([])
+      setEntities([])
+      setRelationsRevision(null)
+      setLoading(true)
+      setError(null)
+      setSaving(false)
+      setDialogOpen(false)
+      setEditing(null)
+      setDeleteTarget(null)
+      setDeleting(false)
+      setPendingId(null)
+      reload()
+    })
+    return () => { cancelled = true }
   }, [reload])
 
   const entityName = useCallback((entityId: string) => {
@@ -589,6 +699,7 @@ function RelationsTab({ instanceId }: { instanceId: string }) {
   }, [entities])
 
   const visible = useMemo(() => {
+    if (relationsRevision !== instanceRevision) return []
     const q = query.trim().toLowerCase()
     if (!q) return relations
     return relations.filter((item) => {
@@ -596,7 +707,7 @@ function RelationsTab({ instanceId }: { instanceId: string }) {
       const tgt = entityName(item.target_entity_id).toLowerCase()
       return src.includes(q) || tgt.includes(q) || item.description.toLowerCase().includes(q)
     })
-  }, [relations, query, entityName])
+  }, [entityName, instanceRevision, query, relations, relationsRevision])
 
   const openCreate = () => { setEditing(null); setForm(emptyRelationForm); setDialogOpen(true); setError(null) }
   const openEdit = (item: OntologyRelation) => {
@@ -608,64 +719,72 @@ function RelationsTab({ instanceId }: { instanceId: string }) {
 
   const save = async () => {
     if (saving) return
+    const requestRevision = instanceRevision
     setSaving(true)
     setError(null)
     try {
       const saved = editing
         ? await updateOntologyRelation(instanceId, editing.id, { description: form.description })
         : await createOntologyRelation(instanceId, form)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setRelations((cur) => {
         const rest = cur.filter((item) => item.id !== saved.id)
         return [saved, ...rest]
       })
       setDialogOpen(false)
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setSaving(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setSaving(false)
     }
   }
 
   const toggleSearchable = async (item: OntologyRelation) => {
     if (pendingId) return
+    const requestRevision = instanceRevision
     setPendingId(item.id)
     setError(null)
     try {
       const saved = await updateOntologyRelation(instanceId, item.id, { searchable: !item.searchable })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setRelations((cur) => cur.map((i) => (i.id === saved.id ? saved : i)))
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setPendingId(null)
+      if (isInstanceRevisionCurrent(requestRevision)) setPendingId(null)
     }
   }
 
   const toggleStatus = async (item: OntologyRelation, status: string) => {
     if (pendingId) return
+    const requestRevision = instanceRevision
     setPendingId(item.id)
     setError(null)
     try {
       const saved = await updateOntologyRelation(instanceId, item.id, { status })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setRelations((cur) => cur.map((i) => (i.id === saved.id ? saved : i)))
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setPendingId(null)
+      if (isInstanceRevisionCurrent(requestRevision)) setPendingId(null)
     }
   }
 
   const confirmDelete = async () => {
     if (!deleteTarget || deleting) return
+    const requestRevision = instanceRevision
     setDeleting(true)
     setError(null)
     try {
       await deleteOntologyRelation(instanceId, deleteTarget.id)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setRelations((cur) => cur.filter((i) => i.id !== deleteTarget.id))
       setDeleteTarget(null)
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setDeleting(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setDeleting(false)
     }
   }
 
@@ -778,13 +897,16 @@ function RelationsTab({ instanceId }: { instanceId: string }) {
 
 function StatsPanel({ instanceId }: { instanceId: string }) {
   const { t } = useTranslation(['ontology', 'common'])
+  const { instanceRevision } = useInstanceStore()
   const [stats, setStats] = useState<OntologyStatsResponse | null>(null)
+  const [statsRevision, setStatsRevision] = useState<number | null>(null)
   const [switchStatus, setSwitchStatus] = useState<OntologySwitchStatusResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [switchSaving, setSwitchSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const reload = useCallback(() => {
+    const requestRevision = instanceRevision
     setLoading(true)
     setError(null)
     Promise.allSettled([
@@ -792,6 +914,7 @@ function StatsPanel({ instanceId }: { instanceId: string }) {
       getOntologySwitchStatus(instanceId),
     ])
       .then(([statsResult, switchResult]) => {
+        if (!isInstanceRevisionCurrent(requestRevision)) return
         if (statsResult.status === 'fulfilled') {
           setStats(statsResult.value)
         }
@@ -805,17 +928,32 @@ function StatsPanel({ instanceId }: { instanceId: string }) {
         if (switchResult.status === 'rejected') {
           errors.push(formatApiError(t, switchResult.reason))
         }
+        setStatsRevision(requestRevision)
         setError(errors.length > 0 ? errors.join(' / ') : null)
       })
-      .finally(() => setLoading(false))
-  }, [instanceId, t])
+      .finally(() => {
+        if (isInstanceRevisionCurrent(requestRevision)) setLoading(false)
+      })
+  }, [instanceId, instanceRevision, t])
 
   useEffect(() => {
-    queueMicrotask(reload)
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setStats(null)
+      setSwitchStatus(null)
+      setStatsRevision(null)
+      setLoading(true)
+      setSwitchSaving(false)
+      setError(null)
+      reload()
+    })
+    return () => { cancelled = true }
   }, [reload])
 
   const toggleInstanceSwitch = async (enabled: boolean) => {
     if (!switchStatus || !switchStatus.global_enabled || switchSaving) return
+    const requestRevision = instanceRevision
     setSwitchSaving(true)
     setError(null)
     try {
@@ -824,14 +962,16 @@ function StatsPanel({ instanceId }: { instanceId: string }) {
       } else {
         await disableOntology(instanceId)
       }
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       reload()
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setSwitchSaving(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setSwitchSaving(false)
     }
   }
 
+  if (statsRevision !== instanceRevision) return <LoadingState />
   if (loading && !stats && !switchStatus) return <LoadingState />
   if (!stats && !switchStatus) {
     return error ? <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null
@@ -942,7 +1082,9 @@ interface ReviewItem {
 
 function ReviewTab({ instanceId }: { instanceId: string }) {
   const { t } = useTranslation(['ontology', 'common'])
+  const { instanceRevision } = useInstanceStore()
   const [items, setItems] = useState<ReviewItem[]>([])
+  const [itemsRevision, setItemsRevision] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -951,6 +1093,7 @@ function ReviewTab({ instanceId }: { instanceId: string }) {
   const [processing, setProcessing] = useState(false)
 
   const reload = useCallback(() => {
+    const requestRevision = instanceRevision
     setLoading(true)
     setError(null)
     Promise.all([
@@ -959,6 +1102,7 @@ function ReviewTab({ instanceId }: { instanceId: string }) {
       listOntologyTypes(instanceId),
     ])
       .then(([entities, relations, types]) => {
+        if (!isInstanceRevisionCurrent(requestRevision)) return
         // Build entity name lookup for relation display
         const entityMap = new Map(entities.map((e) => [e.id, e.name]))
         const entityName = (id: string) => entityMap.get(id) || id
@@ -993,22 +1137,39 @@ function ReviewTab({ instanceId }: { instanceId: string }) {
           })),
         ]
         setItems(reviewItems)
+        setItemsRevision(requestRevision)
       })
-      .catch((e) => setError(formatApiError(t, e)))
-      .finally(() => setLoading(false))
-  }, [instanceId, t])
+      .catch((e) => {
+        if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
+      })
+      .finally(() => {
+        if (isInstanceRevisionCurrent(requestRevision)) setLoading(false)
+      })
+  }, [instanceId, instanceRevision, t])
 
   useEffect(() => {
-    queueMicrotask(reload)
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setItems([])
+      setItemsRevision(null)
+      setLoading(true)
+      setError(null)
+      setSelected(new Set())
+      setProcessing(false)
+      reload()
+    })
+    return () => { cancelled = true }
   }, [reload])
 
   const filtered = useMemo(() => {
+    if (itemsRevision !== instanceRevision) return []
     return items.filter((item) => {
       if (filterStatus !== 'all' && item.status !== filterStatus) return false
       if (filterSource !== 'all' && item.source !== filterSource) return false
       return true
     })
-  }, [items, filterStatus, filterSource])
+  }, [filterSource, filterStatus, instanceRevision, items, itemsRevision])
 
   const allSelected = filtered.length > 0 && filtered.every((item) => selected.has(item.id))
 
@@ -1031,6 +1192,7 @@ function ReviewTab({ instanceId }: { instanceId: string }) {
 
   const doBatch = async (status: string) => {
     if (selected.size === 0 || processing) return
+    const requestRevision = instanceRevision
     setProcessing(true)
     setError(null)
     try {
@@ -1043,12 +1205,13 @@ function ReviewTab({ instanceId }: { instanceId: string }) {
       if (relationIds.length > 0) await batchUpdateRelationStatus(instanceId, { ids: relationIds, status })
       if (typeIds.length > 0) await batchUpdateTypeStatus(instanceId, { ids: typeIds, status })
 
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setSelected(new Set())
       reload()
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setProcessing(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setProcessing(false)
     }
   }
 

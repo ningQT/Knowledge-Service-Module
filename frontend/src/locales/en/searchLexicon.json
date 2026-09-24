@@ -1,7 +1,7 @@
 {
   "title": "Search Lexicon",
-  "description": "Maintain alias and synonym search rules for the current knowledge base instance.",
-  "searchPlaceholder": "Search canonical terms, variants, or notes",
+  "description": "Maintain canonical-to-variant term mappings for this instance. These terms are used to expand search queries and improve recall.",
+  "searchPlaceholder": "Filter canonical terms, variants, or notes",
   "filters": {
     "all": "All types"
   },
@@ -21,7 +21,7 @@
   },
   "empty": {
     "default": "No entries",
-    "description": "Add aliases or synonyms for this instance to improve search parsing.",
+    "description": "Add canonical-to-variant mappings for this instance to improve query expansion.",
     "noInstanceTitle": "No instance selected",
     "noInstanceDescription": "Select a knowledge base instance before editing the search lexicon."
   },
@@ -32,6 +32,7 @@
   "form": {
     "canonical": "Canonical term, e.g. agent",
     "variants": "Variant terms, separated by commas or line breaks",
+    "minLengthHint": "Canonical terms and variants must contain at least 2 characters.",
     "notes": "Notes"
   },
   "delete": {
