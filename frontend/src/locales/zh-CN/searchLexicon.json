@@ -1,7 +1,7 @@
 {
   "title": "检索词表",
-  "description": "维护当前知识库实例的别名和同义词检索规则。",
-  "searchPlaceholder": "搜索主词、变体或备注",
+  "description": "维护当前实例的“主词—变体词”映射。检索命中这些词时，会用于查询扩展和结果召回。",
+  "searchPlaceholder": "筛选主词、变体或备注",
   "filters": {
     "all": "全部类型"
   },
@@ -21,7 +21,7 @@
   },
   "empty": {
     "default": "暂无词条",
-    "description": "为当前实例新增别名或同义词后，会参与检索解析。",
+    "description": "为当前实例新增“主词—变体词”映射后，会参与查询扩展。",
     "noInstanceTitle": "未选择实例",
     "noInstanceDescription": "请选择一个知识库实例后维护检索词表。"
   },
@@ -32,6 +32,7 @@
   "form": {
     "canonical": "主词，例如 agent",
     "variants": "变体词，用逗号或换行分隔",
+    "minLengthHint": "主词和变体词至少需要 2 个字符。",
     "notes": "备注"
   },
   "delete": {

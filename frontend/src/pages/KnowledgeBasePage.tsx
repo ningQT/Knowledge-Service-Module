@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ArrowDownAZ, BookOpen, CheckCircle2, FileText, Filter, Loader2, Plus, Search, Trash2, X } from 'lucide-react'
-import { useInstanceStore } from '@/stores/useInstanceStore'
+import { isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
 import { deleteNote, listNoteFacets, listNotes, type ListNotesFilters, type NoteListItem } from '@/services/notes'
 import { getInstanceDiagnostics, listInstances } from '@/services/instances'
 import type { Instance, InstanceDiagnostics } from '@/types/api'
@@ -353,7 +353,7 @@ function DiagnosticsPanel({
 export default function KnowledgeBasePage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { instanceId, instances, setInstanceId, setInstances } = useInstanceStore()
+  const { instanceId, instanceRevision, instances, setInstanceId, setInstances } = useInstanceStore()
   const { clearFilters, filters, searchParams, updateFilter } = useKnowledgeFilters()
   const [facets, setFacets] = useState<Record<string, string[]>>({})
   const [diagnostics, setDiagnostics] = useState<InstanceDiagnostics | null>(null)
@@ -381,6 +381,24 @@ export default function KnowledgeBasePage() {
 
   useEffect(() => {
     let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+      setFacets({})
+      setDiagnostics(null)
+      setNotes([])
+      setLoading(Boolean(instanceId))
+      setError(null)
+      setDiagnosticsLoading(Boolean(instanceId))
+      setDiagnosticsError(null)
+      setDeleteTarget(null)
+      setDeleteError(null)
+      setActionMessage(null)
+    })
+    return () => { cancelled = true }
+  }, [instanceId, instanceRevision])
+
+  useEffect(() => {
+    let cancelled = false
     if (instanceId || instances.length > 0) return () => { cancelled = true }
     queueMicrotask(() => {
       if (cancelled) return
@@ -396,22 +414,15 @@ export default function KnowledgeBasePage() {
 
   useEffect(() => {
     let cancelled = false
-    if (!instanceId) {
-      queueMicrotask(() => {
-        if (!cancelled) {
-          setFacets({})
-          setDiagnostics(null)
-        }
-      })
-      return () => { cancelled = true }
-    }
+    if (!instanceId) return () => { cancelled = true }
+    const requestRevision = instanceRevision
     queueMicrotask(() => {
       if (cancelled) return
       setDiagnosticsLoading(true)
       setDiagnosticsError(null)
       Promise.allSettled([listNoteFacets(instanceId), getInstanceDiagnostics(instanceId)])
         .then(([facetResult, diagnosticsResult]) => {
-          if (cancelled) return
+          if (cancelled || !isInstanceRevisionCurrent(requestRevision)) return
           setFacets(facetResult.status === 'fulfilled' ? facetResult.value : {})
           if (diagnosticsResult.status === 'fulfilled') {
             setDiagnostics(diagnosticsResult.value)
@@ -420,19 +431,17 @@ export default function KnowledgeBasePage() {
             setDiagnosticsError(formatApiError(t, diagnosticsResult.reason))
           }
         })
-        .finally(() => { if (!cancelled) setDiagnosticsLoading(false) })
+        .finally(() => {
+          if (!cancelled && isInstanceRevisionCurrent(requestRevision)) setDiagnosticsLoading(false)
+        })
     })
     return () => { cancelled = true }
-  }, [instanceId, t])
+  }, [instanceId, instanceRevision, t])
 
   useEffect(() => {
     let cancelled = false
-    if (!instanceId) {
-      queueMicrotask(() => {
-        if (!cancelled) setNotes([])
-      })
-      return () => { cancelled = true }
-    }
+    if (!instanceId) return () => { cancelled = true }
+    const requestRevision = instanceRevision
     queueMicrotask(() => {
       if (!cancelled) {
         setLoading(true)
@@ -440,11 +449,17 @@ export default function KnowledgeBasePage() {
       }
     })
     listNotes(instanceId, requestFilters)
-      .then((data) => { if (!cancelled) setNotes(data) })
-      .catch((e) => { if (!cancelled) setError(formatApiError(t, e)) })
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .then((data) => {
+        if (!cancelled && isInstanceRevisionCurrent(requestRevision)) setNotes(data)
+      })
+      .catch((e) => {
+        if (!cancelled && isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
+      })
+      .finally(() => {
+        if (!cancelled && isInstanceRevisionCurrent(requestRevision)) setLoading(false)
+      })
     return () => { cancelled = true }
-  }, [instanceId, requestFilters, t])
+  }, [instanceId, instanceRevision, requestFilters, t])
 
   const domains = useMemo(() => facets.domain || [], [facets])
   const kinds = useMemo(() => facets.kind || [], [facets])
@@ -464,10 +479,12 @@ export default function KnowledgeBasePage() {
 
   const refreshFacetsAndDiagnostics = useCallback(() => {
     if (!instanceId) return
+    const requestRevision = instanceRevision
     setDiagnosticsLoading(true)
     setDiagnosticsError(null)
     Promise.allSettled([listNoteFacets(instanceId), getInstanceDiagnostics(instanceId)])
       .then(([facetResult, diagnosticsResult]) => {
+        if (!isInstanceRevisionCurrent(requestRevision)) return
         setFacets(facetResult.status === 'fulfilled' ? facetResult.value : {})
         if (diagnosticsResult.status === 'fulfilled') {
           setDiagnostics(diagnosticsResult.value)
@@ -476,23 +493,27 @@ export default function KnowledgeBasePage() {
           setDiagnosticsError(formatApiError(t, diagnosticsResult.reason))
         }
       })
-      .finally(() => setDiagnosticsLoading(false))
-  }, [instanceId, t])
+      .finally(() => {
+        if (isInstanceRevisionCurrent(requestRevision)) setDiagnosticsLoading(false)
+      })
+  }, [instanceId, instanceRevision, t])
 
   const handleDeleteNote = async () => {
     if (!instanceId || !deleteTarget || deletingPath) return
+    const requestRevision = instanceRevision
     setDeletingPath(deleteTarget.file_path)
     setDeleteError(null)
     try {
       await deleteNote(instanceId, deleteTarget.file_path)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setNotes((current) => current.filter((note) => note.file_path !== deleteTarget.file_path))
       setDeleteTarget(null)
       setActionMessage(t('actions.deleted'))
       refreshFacetsAndDiagnostics()
     } catch (e) {
-      setDeleteError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setDeleteError(formatApiError(t, e))
     } finally {
-      setDeletingPath(null)
+      if (isInstanceRevisionCurrent(requestRevision)) setDeletingPath(null)
     }
   }
 

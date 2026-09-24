@@ -16,7 +16,7 @@ import {
   listSearchLexicon,
   updateSearchLexicon,
 } from '@/services/searchLexicon'
-import { useInstanceStore } from '@/stores/useInstanceStore'
+import { isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
 import type { SearchLexiconEntry, SearchLexiconRelationType } from '@/types/api'
 
 const ALL = 'all'
@@ -35,6 +35,12 @@ const emptyForm: FormState = {
   variant_terms: '',
   enabled: true,
   notes: '',
+}
+
+const MIN_TERM_LENGTH = 2
+
+function isShortTerm(value: string) {
+  return value.trim().length < MIN_TERM_LENGTH
 }
 
 function parseVariants(value: string) {
@@ -56,8 +62,9 @@ function entryToForm(entry: SearchLexiconEntry): FormState {
 
 export default function SearchLexiconPage() {
   const { t } = useTranslation(['searchLexicon', 'common'])
-  const { instanceId } = useInstanceStore()
+  const { instanceId, instanceRevision } = useInstanceStore()
   const [entries, setEntries] = useState<SearchLexiconEntry[]>([])
+  const [entriesRevision, setEntriesRevision] = useState<number | null>(null)
   const [filter, setFilter] = useState<string>(ALL)
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
@@ -70,31 +77,49 @@ export default function SearchLexiconPage() {
   const [pendingEntryId, setPendingEntryId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  const parsedVariants = useMemo(() => parseVariants(form.variant_terms), [form.variant_terms])
+  const hasInvalidTerms = isShortTerm(form.canonical_term) || parsedVariants.some(isShortTerm)
+
   const reload = useCallback(() => {
     if (!instanceId) return
+    const requestRevision = instanceRevision
     setLoading(true)
     setError(null)
     listSearchLexicon(instanceId)
-      .then(setEntries)
-      .catch((e) => setError(formatApiError(t, e)))
-      .finally(() => setLoading(false))
-  }, [instanceId, t])
+      .then((data) => {
+        if (!isInstanceRevisionCurrent(requestRevision)) return
+        setEntries(data)
+        setEntriesRevision(requestRevision)
+      })
+      .catch((e) => {
+        if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
+      })
+      .finally(() => {
+        if (isInstanceRevisionCurrent(requestRevision)) setLoading(false)
+      })
+  }, [instanceId, instanceRevision, t])
 
   useEffect(() => {
     let cancelled = false
-    if (!instanceId) {
-      queueMicrotask(() => {
-        if (!cancelled) setEntries([])
-      })
-      return () => { cancelled = true }
-    }
     queueMicrotask(() => {
-      if (!cancelled) reload()
+      if (cancelled) return
+      setEntries([])
+      setEntriesRevision(null)
+      setLoading(Boolean(instanceId))
+      setError(null)
+      setSaving(false)
+      setDialogOpen(false)
+      setEditing(null)
+      setDeleteTarget(null)
+      setPendingEntryId(null)
+      setDeleting(false)
+      if (instanceId) reload()
     })
     return () => { cancelled = true }
   }, [instanceId, reload])
 
   const visibleEntries = useMemo(() => {
+    if (entriesRevision !== instanceRevision) return []
     const q = query.trim().toLowerCase()
     return entries.filter((entry) => {
       if (filter !== ALL && entry.relation_type !== filter) return false
@@ -105,7 +130,7 @@ export default function SearchLexiconPage() {
         entry.notes.toLowerCase().includes(q)
       )
     })
-  }, [entries, filter, query])
+  }, [entries, entriesRevision, filter, instanceRevision, query])
 
   const openCreate = () => {
     setEditing(null)
@@ -122,13 +147,14 @@ export default function SearchLexiconPage() {
   }
 
   const saveEntry = async () => {
-    if (!instanceId || saving) return
+    if (!instanceId || saving || hasInvalidTerms) return
+    const requestRevision = instanceRevision
     setSaving(true)
     setError(null)
     const payload = {
       relation_type: form.relation_type,
       canonical_term: form.canonical_term,
-      variant_terms: parseVariants(form.variant_terms),
+      variant_terms: parsedVariants,
       enabled: form.enabled,
       notes: form.notes,
     }
@@ -136,44 +162,52 @@ export default function SearchLexiconPage() {
       const saved = editing
         ? await updateSearchLexicon(instanceId, editing.id, payload)
         : await createSearchLexicon(instanceId, payload)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setEntries((current) => {
         const rest = current.filter((item) => item.id !== saved.id)
         return [...rest, saved].sort((a, b) => a.canonical_term.localeCompare(b.canonical_term))
       })
+      setEntriesRevision(requestRevision)
       setDialogOpen(false)
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setSaving(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setSaving(false)
     }
   }
 
   const toggleEntry = async (entry: SearchLexiconEntry) => {
     if (!instanceId || pendingEntryId) return
+    const requestRevision = instanceRevision
     setPendingEntryId(entry.id)
     setError(null)
     try {
       const saved = await updateSearchLexicon(instanceId, entry.id, { enabled: !entry.enabled })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setEntries((current) => current.map((item) => (item.id === saved.id ? saved : item)))
+      setEntriesRevision(requestRevision)
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setPendingEntryId(null)
+      if (isInstanceRevisionCurrent(requestRevision)) setPendingEntryId(null)
     }
   }
 
   const confirmDelete = async () => {
     if (!instanceId || !deleteTarget || deleting) return
+    const requestRevision = instanceRevision
     setDeleting(true)
     setError(null)
     try {
       await deleteSearchLexicon(instanceId, deleteTarget.id)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setEntries((current) => current.filter((item) => item.id !== deleteTarget.id))
+      setEntriesRevision(requestRevision)
       setDeleteTarget(null)
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
     } finally {
-      setDeleting(false)
+      if (isInstanceRevisionCurrent(requestRevision)) setDeleting(false)
     }
   }
 
@@ -277,6 +311,7 @@ export default function SearchLexiconPage() {
             </Select>
             <Input value={form.canonical_term} onChange={(e) => setForm({ ...form, canonical_term: e.target.value })} placeholder={t('form.canonical')} />
             <Input value={form.variant_terms} onChange={(e) => setForm({ ...form, variant_terms: e.target.value })} placeholder={t('form.variants')} />
+            <p className="text-xs text-muted-foreground">{t('form.minLengthHint')}</p>
             <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder={t('form.notes')} />
             <div className="flex items-center gap-2">
               <Switch checked={form.enabled} onCheckedChange={(checked) => setForm({ ...form, enabled: checked })} />
@@ -285,7 +320,7 @@ export default function SearchLexiconPage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>{t('common:cancel')}</Button>
-            <Button onClick={() => void saveEntry()} disabled={saving || !form.canonical_term.trim()}>
+            <Button onClick={() => void saveEntry()} disabled={saving || hasInvalidTerms}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('actions.save')}
             </Button>

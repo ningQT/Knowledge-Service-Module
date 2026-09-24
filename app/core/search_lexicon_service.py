@@ -10,6 +10,7 @@ from app.storage.database import DatabaseBackend
 
 RELATION_TYPES = {"alias", "synonym"}
 MAX_VARIANT_TERMS = 50
+MIN_TERM_LENGTH = 2
 
 
 class SearchLexiconValidationError(ValueError):
@@ -202,6 +203,10 @@ def _normalize_term(value: Any, *, field: str) -> str:
     text = str(value or "").strip()
     if not text:
         raise SearchLexiconValidationError(f"{field} is required")
+    # 词典构建会过滤单字符词条，因此在写入阶段明确拒绝，避免保存后静默失效。
+    if len(_term_key(text)) < MIN_TERM_LENGTH:
+        message = f"{field} must contain at least {MIN_TERM_LENGTH} characters"
+        raise SearchLexiconValidationError(message)
     return text
 
 
@@ -217,6 +222,10 @@ def _normalize_variants(values: Any, canonical: str) -> list[str]:
         if not text:
             continue
         key = _term_key(text)
+        if len(key) < MIN_TERM_LENGTH:
+            raise SearchLexiconValidationError(
+                f"variant_terms must contain at least {MIN_TERM_LENGTH} characters"
+            )
         if key in seen:
             continue
         seen.add(key)

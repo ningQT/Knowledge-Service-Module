@@ -20,7 +20,7 @@ import {
   XCircle,
   Link2,
 } from 'lucide-react'
-import { useInstanceStore } from '@/stores/useInstanceStore'
+import { isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
 import { useSearchStore, type SearchTabKey } from '@/stores/useSearchStore'
 import { createAnswerJobSSEToken, getAnswerJob, getAnswerJobSSEUrl, search, startAnswerJob } from '@/services/search'
 import type { AnswerResult, AnswerSection, AnswerStep, BatchProcessDetail, ProcessSummary, SearchResult, SearchStats } from '@/types/api'
@@ -1255,7 +1255,7 @@ function saveHistory(items: string[]) {
 
 export default function SearchPage() {
   const navigate = useNavigate()
-  const { instanceId } = useInstanceStore()
+  const { instanceId, instanceRevision } = useInstanceStore()
   const {
     query,
     searching,
@@ -1264,6 +1264,7 @@ export default function SearchPage() {
     error,
     elapsedMs,
     answerJobId,
+    answerInstanceRevision,
     answerStatus,
     answerSteps,
     answerResult,
@@ -1336,26 +1337,31 @@ export default function SearchPage() {
   const runSearch = useCallback(async (rawQuery: string) => {
     const searchQuery = rawQuery.trim()
     if (!searchQuery || !instanceId) return
+    const requestRevision = instanceRevision
     addHistory(searchQuery)
     setSearching(true)
     setError(null)
     const start = performance.now()
     try {
       const data = await search(searchQuery, [instanceId])
+      // 实例切换后丢弃旧检索结果，避免 A 的响应写入 B 的页面状态。
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setElapsedMs(Math.round(performance.now() - start))
       setSearchInstanceId(instanceId)
       setResult(data)
       setActiveTab('core')
       handleResetAnswer()
     } catch (e) {
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setElapsedMs(Math.round(performance.now() - start))
       setSearchInstanceId(instanceId)
       setError(formatApiError(t, e))
       setResult(null)
       handleResetAnswer()
+    } finally {
+      if (isInstanceRevisionCurrent(requestRevision)) setSearching(false)
     }
-    setSearching(false)
-  }, [instanceId, addHistory, handleResetAnswer, setActiveTab, setElapsedMs, setError, setResult, setSearchInstanceId, setSearching, t])
+  }, [instanceId, instanceRevision, addHistory, handleResetAnswer, setActiveTab, setElapsedMs, setError, setResult, setSearchInstanceId, setSearching, t])
 
   const handleSearch = useCallback(async () => {
     await runSearch(query)
@@ -1379,6 +1385,7 @@ export default function SearchPage() {
 
   const handleGenerateAnswer = useCallback(async () => {
     if (!result || !instanceId || answerStatus === 'running' || answerStatus === 'pending') return
+    const requestRevision = instanceRevision
     answerTerminalRef.current = false
     setAnswerError(null)
     setAnswerNotice(null)
@@ -1391,15 +1398,18 @@ export default function SearchPage() {
         include_search_result: false,
         include_comprehension: false,
       })
-      setAnswerJobId(job.job_id)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
+      setAnswerJobId(job.job_id, requestRevision)
       setAnswerStatus(job.status)
     } catch (e) {
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setAnswerStatus('failed')
       setAnswerError(formatApiError(t, e))
     }
   }, [
     answerStatus,
     instanceId,
+    instanceRevision,
     query,
     result,
     setAnswerError,
@@ -1412,15 +1422,22 @@ export default function SearchPage() {
     t,
   ])
 
-  const sseUrl = answerJobId && ACTIVE_ANSWER_STATUSES.has(answerStatus) ? getAnswerJobSSEUrl(answerJobId) : null
+  const sseUrl =
+    answerJobId && answerInstanceRevision === instanceRevision && ACTIVE_ANSWER_STATUSES.has(answerStatus)
+      ? getAnswerJobSSEUrl(answerJobId)
+      : null
   useSSE(sseUrl, {
     resolveUrl: async (url) => {
-      if (!answerJobId) return url
+      if (!answerJobId || answerInstanceRevision !== instanceRevision) return url
       const token = await createAnswerJobSSEToken(answerJobId)
       return token.sse_url
     },
     eventTypes: ['job_start', 'step_update', 'step_output', 'thought_summary', 'job_complete', 'job_failed'],
     onEvent: (event, data) => {
+      if (
+        answerInstanceRevision !== instanceRevision ||
+        !isInstanceRevisionCurrent(answerInstanceRevision)
+      ) return
       const payload = data as Record<string, unknown>
       setAnswerNotice(null)
       if (event === 'job_start') {
@@ -1460,6 +1477,10 @@ export default function SearchPage() {
       }
     },
     onError: () => {
+      if (
+        answerInstanceRevision !== instanceRevision ||
+        !isInstanceRevisionCurrent(answerInstanceRevision)
+      ) return
       if (answerJobId && ACTIVE_ANSWER_STATUSES.has(answerStatus) && !answerTerminalRef.current) {
         setAnswerNotice(t('answer.sseFallback'))
       }
@@ -1468,9 +1489,12 @@ export default function SearchPage() {
 
   useEffect(() => {
     if (!answerJobId || !['pending', 'running'].includes(answerStatus)) return
+    if (answerInstanceRevision === null || answerInstanceRevision !== instanceRevision) return
+    const requestRevision = answerInstanceRevision
     const interval = setInterval(async () => {
       try {
         const job = await getAnswerJob(answerJobId)
+        if (!isInstanceRevisionCurrent(requestRevision)) return
         setAnswerStatus(job.status)
         setAnswerSteps(job.steps || [])
         if (job.result) {
@@ -1489,13 +1513,15 @@ export default function SearchPage() {
           setAnswerError(formatAnswerWarnings(t, job.warnings))
         }
       } catch (e) {
-        setAnswerError(formatApiError(t, e))
+        if (isInstanceRevisionCurrent(requestRevision)) setAnswerError(formatApiError(t, e))
       }
     }, 3000)
     return () => clearInterval(interval)
   }, [
+    answerInstanceRevision,
     answerJobId,
     answerStatus,
+    instanceRevision,
     setAnswerError,
     setAnswerJobId,
     setAnswerNotice,

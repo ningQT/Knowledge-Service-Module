@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Upload, FileText, Loader2, StopCircle } from 'lucide-react'
-import { useInstanceStore } from '@/stores/useInstanceStore'
+import { isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
 import { useIngestStore } from '@/stores/useIngestStore'
 import { useSSE } from '@/hooks/useSSE'
 import { ingestAsync, getJob, getJobSSEUrl, createJobSSEToken, cancelJob } from '@/services/ingest'
@@ -17,7 +17,7 @@ import { useTranslation } from 'react-i18next'
 const ACTIVE_JOB_STATUSES = new Set(['pending', 'running'])
 
 export default function IngestPage() {
-  const { instanceId } = useInstanceStore()
+  const { instanceId, instanceRevision } = useInstanceStore()
   const [currentInstance, setCurrentInstance] = useState<Instance | null>(null)
 
   useEffect(() => {
@@ -28,9 +28,16 @@ export default function IngestPage() {
       })
       return () => { cancelled = true }
     }
-    getInstance(instanceId).then(setCurrentInstance).catch(() => setCurrentInstance(null))
+    const requestRevision = instanceRevision
+    getInstance(instanceId)
+      .then((instance) => {
+        if (!cancelled && isInstanceRevisionCurrent(requestRevision)) setCurrentInstance(instance)
+      })
+      .catch(() => {
+        if (!cancelled && isInstanceRevisionCurrent(requestRevision)) setCurrentInstance(null)
+      })
     return () => { cancelled = true }
-  }, [instanceId])
+  }, [instanceId, instanceRevision])
   const {
     currentJobId,
     jobInstanceId,
@@ -57,6 +64,18 @@ export default function IngestPage() {
   const pollingRef = useRef(false)
   const uploadDisabled = !instanceId || submitting || status === 'running'
 
+  useEffect(() => {
+    queueMicrotask(() => {
+      setCurrentInstance(null)
+      setFile(null)
+      setError(null)
+      setCancelOpen(false)
+      setSubmitting(false)
+      setPolling(false)
+      pollingRef.current = false
+    })
+  }, [instanceRevision])
+
   const sseUrl =
     currentJobId && instanceId && jobInstanceId === instanceId && ACTIVE_JOB_STATUSES.has(status)
       ? getJobSSEUrl(instanceId, currentJobId)
@@ -70,6 +89,12 @@ export default function IngestPage() {
     },
     eventTypes: ['step_update', 'step_output', 'job_complete', 'job_start', 'job_cancelled'],
     onEvent: (event: string, data: unknown) => {
+      if (
+        !currentJobId ||
+        !instanceId ||
+        jobInstanceId !== instanceId ||
+        !isInstanceRevisionCurrent(instanceRevision)
+      ) return
       const d = data as { step?: number; status?: string; summary?: Record<string, unknown> }
       if (event === 'step_update' || event === 'step_output') {
         if (d.step && d.status) updateStep(d.step, d.status, d.summary)
@@ -82,6 +107,7 @@ export default function IngestPage() {
     },
     onError: () => {
       // SSE 连接失败，切换到轮询回退（设计文档 §4.7.3 功能 #8）
+      if (!isInstanceRevisionCurrent(instanceRevision)) return
       if (currentJobId && instanceId && jobInstanceId === instanceId && status === 'running') {
         pollingRef.current = true
         setPolling(true)
@@ -92,10 +118,12 @@ export default function IngestPage() {
   // S-04: 轮询回退逻辑
   useEffect(() => {
     if (!polling || !currentJobId || !instanceId || jobInstanceId !== instanceId) return
+    const requestRevision = instanceRevision
 
     const interval = setInterval(async () => {
       try {
         const job = await getJob(instanceId, currentJobId)
+        if (!isInstanceRevisionCurrent(requestRevision)) return
 
         // 更新步骤状态
         for (const step of job.steps) {
@@ -131,22 +159,23 @@ export default function IngestPage() {
     }, 2000)
 
     return () => clearInterval(interval)
-  }, [polling, currentJobId, instanceId, jobInstanceId, updateStep, setResult, cancel])
+  }, [polling, currentJobId, instanceId, instanceRevision, jobInstanceId, updateStep, setResult, cancel])
 
   useEffect(() => {
     if (!currentJobId || !instanceId || jobInstanceId !== instanceId) return
     let cancelled = false
+    const requestRevision = instanceRevision
     getJob(instanceId, currentJobId)
       .then((job) => {
-        if (!cancelled) restoreJob(job)
+        if (!cancelled && isInstanceRevisionCurrent(requestRevision)) restoreJob(job)
       })
       .catch((e) => {
-        if (!cancelled && e instanceof ApiError && e.status === 404) {
+        if (!cancelled && isInstanceRevisionCurrent(requestRevision) && e instanceof ApiError && e.status === 404) {
           reset()
         }
       })
     return () => { cancelled = true }
-  }, [currentJobId, instanceId, jobInstanceId, reset, restoreJob])
+  }, [currentJobId, instanceId, instanceRevision, jobInstanceId, reset, restoreJob])
 
   useEffect(() => {
     if (currentJobId && jobInstanceId && instanceId && jobInstanceId !== instanceId) {
@@ -156,6 +185,7 @@ export default function IngestPage() {
 
   const handleSubmit = useCallback(async () => {
     if (!file || !instanceId) return
+    const requestRevision = instanceRevision
     setSubmitting(true)
     setError(null)
     try {
@@ -163,12 +193,14 @@ export default function IngestPage() {
         domain_hint: domainHint || undefined,
         auto_map: autoMap,
       })
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       setJobId(job_id, instanceId)
     } catch (e) {
-      setError(formatApiError(t, e))
+      if (isInstanceRevisionCurrent(requestRevision)) setError(formatApiError(t, e))
+    } finally {
+      if (isInstanceRevisionCurrent(requestRevision)) setSubmitting(false)
     }
-    setSubmitting(false)
-  }, [file, instanceId, domainHint, autoMap, setJobId, t])
+  }, [file, instanceId, instanceRevision, domainHint, autoMap, setJobId, t])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -181,17 +213,22 @@ export default function IngestPage() {
 
   const handleCancel = useCallback(async () => {
     if (!currentJobId || !instanceId || jobInstanceId !== instanceId) return
+    const requestRevision = instanceRevision
     setCancelling(true)
     try {
       await cancelJob(instanceId, currentJobId)
+      if (!isInstanceRevisionCurrent(requestRevision)) return
       cancel()
       setFile(null)
     } catch (e) {
       console.error('Cancel failed:', e)
+    } finally {
+      if (isInstanceRevisionCurrent(requestRevision)) {
+        setCancelling(false)
+        setCancelOpen(false)
+      }
     }
-    setCancelling(false)
-    setCancelOpen(false)
-  }, [currentJobId, instanceId, jobInstanceId, cancel])
+  }, [currentJobId, instanceId, instanceRevision, jobInstanceId, cancel])
 
   return (
     <div className="max-w-4xl space-y-6">

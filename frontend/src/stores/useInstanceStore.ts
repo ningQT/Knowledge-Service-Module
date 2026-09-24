@@ -27,6 +27,7 @@ function persistInstanceId(id: string | null): void {
 
 interface InstanceStore {
   instanceId: string | null
+  instanceRevision: number
   instances: Instance[]
   setInstanceId: (id: string | null) => void
   setInstances: (list: Instance[]) => void
@@ -34,10 +35,24 @@ interface InstanceStore {
 
 export const useInstanceStore = create<InstanceStore>((set) => ({
   instanceId: readStoredInstanceId(),
+  instanceRevision: 0,
   instances: [],
   setInstanceId: (id) => {
     persistInstanceId(id)
-    set({ instanceId: id })
+    set((state) => ({
+      instanceId: id,
+      instanceRevision: state.instanceRevision + 1,
+    }))
   },
   setInstances: (list) => set({ instances: list }),
 }))
+
+/**
+ * 判断异步响应是否仍属于当前实例选择周期。
+ *
+ * @param revision 请求发起时捕获的实例版本号
+ * @returns 当前实例版本与请求版本一致时返回 true
+ */
+export function isInstanceRevisionCurrent(revision: number): boolean {
+  return useInstanceStore.getState().instanceRevision === revision
+}
