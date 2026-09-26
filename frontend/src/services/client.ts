@@ -11,11 +11,15 @@ const api = ky.create({
         if (!response.ok) {
           const error = await response.json().catch(() => ({ error: 'Request failed', code: 'REQUEST_FAILED' }))
           const payload = error as { code?: string; error?: string; detail?: string }
-          throw new ApiError(payload.error || payload.detail || `HTTP ${response.status}`, {
+          const apiError = new ApiError(payload.error || payload.detail || `HTTP ${response.status}`, {
             code: payload.code,
             detail: payload.detail,
             status: response.status,
           })
+          if (response.status === 403 && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('ksm:forbidden', { detail: apiError }))
+          }
+          throw apiError
         }
       },
     ],

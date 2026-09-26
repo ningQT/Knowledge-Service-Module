@@ -4,12 +4,14 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 # === Auth endpoints ===
+
 
 class AdminUserResponse(BaseModel):
     id: str
     username: str
+    role: Literal["admin", "user"] = "user"
+    enabled: bool = True
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -39,13 +41,43 @@ class LogoutResponse(BaseModel):
     logged_out: bool = True
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=8, max_length=256)
+
+
+class CreateAccountRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=8, max_length=256)
+    enabled: bool = True
+
+
+class UpdateAccountRequest(BaseModel):
+    enabled: bool
+
+
+class ResetPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=8, max_length=256)
+
+
+class DeleteAccountRequest(BaseModel):
+    confirm_username: str = Field(min_length=1, max_length=80)
+
+
+class AccountListResponse(BaseModel):
+    accounts: list[AdminUserResponse] = Field(default_factory=list)
+
+
 class ApiKeyResponse(BaseModel):
     id: str
     name: str
     key_prefix: str
     scope: str
     enabled: bool
+    owner_account_id: str | None = None
+    owner_username: str | None = None
     instance_ids: list[str] = Field(default_factory=list)
+    eligible_instance_ids: list[str] = Field(default_factory=list)
     created_at: str
     updated_at: str
     last_used_at: str | None = None
@@ -72,7 +104,9 @@ class ApiKeyCreateResponse(BaseModel):
     api_key: ApiKeyResponse
     secret: str
 
+
 # === Instance endpoints ===
+
 
 class CreateInstanceRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
@@ -92,6 +126,10 @@ class InstanceResponse(BaseModel):
     name: str
     template_id: str
     vault_path: str | None = None
+    owner_account_id: str | None = None
+    access_level: Literal["admin", "owner", "edit", "read"] | None = None
+    can_edit: bool = False
+    can_manage: bool = False
     auto_map: bool
     language: Literal["zh", "en"] = "zh"
     created_at: str
@@ -102,7 +140,58 @@ class InstanceListResponse(BaseModel):
     instances: list[InstanceResponse]
 
 
+class InstancePermissionUpdate(BaseModel):
+    account_id: str
+    permission: Literal["none", "read", "edit"]
+
+
+class UpdateInstancePermissionsRequest(BaseModel):
+    permissions: list[InstancePermissionUpdate] = Field(default_factory=list, max_length=500)
+
+
+class InstancePermissionAccount(BaseModel):
+    account_id: str
+    username: str
+    enabled: bool
+    permission: Literal["none", "read", "edit"]
+    affected_api_key_count: int = 0
+
+
+class InstancePermissionOwner(BaseModel):
+    account_id: str
+    username: str
+    permission: Literal["owner"] = "owner"
+
+
+class InstancePermissionListResponse(BaseModel):
+    instance_id: str
+    instance_name: str
+    owner: InstancePermissionOwner
+    accounts: list[InstancePermissionAccount] = Field(default_factory=list)
+
+
+class BoundApiKeyResponse(BaseModel):
+    id: str
+    name: str
+    key_prefix: str
+    scope: str
+    enabled: bool
+    owner_account_id: str
+    owner_username: str
+    last_used_at: str | None = None
+
+
+class BoundApiKeyListResponse(BaseModel):
+    instance_id: str
+    api_keys: list[BoundApiKeyResponse] = Field(default_factory=list)
+
+
+class DeleteInstanceRequest(BaseModel):
+    confirm_name: str = Field(min_length=1, max_length=120)
+
+
 # === Ingest endpoint ===
+
 
 class IngestResponse(BaseModel):
     job_id: str
@@ -115,11 +204,12 @@ class IngestResponse(BaseModel):
 
 # === Search endpoint ===
 
+
 class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     instance_ids: list[str] | None = Field(default=None, max_length=200)
-    layer_filter: int | None = None       # 1=资料来源, 2=知识卡片, 3=知识地图
-    verification_filter: str | None = None # "verified" / "unverified" / "draft"
+    layer_filter: int | None = None  # 1=资料来源, 2=知识卡片, 3=知识地图
+    verification_filter: str | None = None  # "verified" / "unverified" / "draft"
     include_comprehension: bool = True
 
 
@@ -198,6 +288,7 @@ class SseTokenResponse(BaseModel):
 
 # === Search lexicon endpoints ===
 
+
 class SearchLexiconEntryResponse(BaseModel):
     id: str
     instance_id: str
@@ -232,6 +323,7 @@ class UpdateSearchLexiconRequest(BaseModel):
 
 # === Sync endpoints ===
 
+
 class SyncResponse(BaseModel):
     added: list[str] = Field(default_factory=list)
     modified: list[str] = Field(default_factory=list)
@@ -248,6 +340,7 @@ class ReindexResponse(BaseModel):
 
 
 # === Note endpoint ===
+
 
 class NoteResponse(BaseModel):
     file_path: str
@@ -302,6 +395,7 @@ class InstanceDeleteResponse(BaseModel):
 
 # === Error response ===
 
+
 class ErrorResponse(BaseModel):
     error: str
     code: str
@@ -309,6 +403,7 @@ class ErrorResponse(BaseModel):
 
 
 # === Phase 3: Instance stats ===
+
 
 class InstanceStatsResponse(BaseModel):
     instance_id: str
@@ -336,6 +431,7 @@ class InstanceDiagnosticsResponse(BaseModel):
 
 
 # === Phase 3: Graph API ===
+
 
 class GraphNodeResponse(BaseModel):
     id: str
@@ -365,6 +461,7 @@ class GraphResponse(BaseModel):
 
 # === Phase 3: Async ingest + SSE ===
 
+
 class AsyncIngestResponse(BaseModel):
     job_id: str
     status: str = "pending"
@@ -389,6 +486,7 @@ class IngestJobResponse(BaseModel):
 
 
 # === Phase 3: LLM Settings ===
+
 
 class LLMSettingsRequest(BaseModel):
     provider: str | None = Field(default=None, max_length=80)
@@ -449,6 +547,7 @@ class LLMTestResponse(BaseModel):
 
 
 # === Ontology endpoints (Phase 8) ===
+
 
 class OntologyTypeResponse(BaseModel):
     id: str

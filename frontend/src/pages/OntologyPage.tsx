@@ -35,7 +35,12 @@ import {
   updateOntologyRelation,
   updateOntologyType,
 } from '@/services/ontology'
-import { isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
+import {
+  canEditCurrentInstance,
+  canManageCurrentInstance,
+  isInstanceRevisionCurrent,
+  useInstanceStore,
+} from '@/stores/useInstanceStore'
 import type {
   OntologyAlias,
   OntologyEntity,
@@ -81,6 +86,7 @@ const STATUS_OPTIONS = ['active', 'candidate', 'deprecated'] as const
 // =============================================================================
 
 function TypesTab({ instanceId }: { instanceId: string }) {
+  const readOnly = !canEditCurrentInstance()
   const { t } = useTranslation(['ontology', 'common'])
   const { instanceRevision } = useInstanceStore()
   const [types, setTypes] = useState<OntologyType[]>([])
@@ -221,7 +227,7 @@ function TypesTab({ instanceId }: { instanceId: string }) {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('form.searchPlaceholder')} className="pl-9" />
         </div>
-        <Button onClick={openCreate}><Plus className="h-4 w-4" />{t('actions.create')}</Button>
+        <Button onClick={openCreate} disabled={readOnly}><Plus className="h-4 w-4" />{t('actions.create')}</Button>
       </div>
 
       {error && <div className="rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error">{error}</div>}
@@ -245,17 +251,17 @@ function TypesTab({ instanceId }: { instanceId: string }) {
                   {item.description && <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={item.searchable} onCheckedChange={() => void toggleSearchable(item)} disabled={Boolean(pendingId)} />
+                  <Switch checked={item.searchable} onCheckedChange={() => void toggleSearchable(item)} disabled={readOnly || Boolean(pendingId)} />
                   <span className="text-xs text-muted-foreground">{item.searchable ? t('searchable.on') : t('searchable.off')}</span>
                 </div>
-                <Select value={item.status} onValueChange={(v) => void toggleStatus(item, v)} disabled={Boolean(pendingId)}>
+                <Select value={item.status} onValueChange={(v) => void toggleStatus(item, v)} disabled={readOnly || Boolean(pendingId)}>
                   <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{t(`status.${s}`)}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button variant="ghost" size="sm" onClick={() => openEdit(item)}><Edit3 className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)}><Trash2 className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => openEdit(item)} disabled={readOnly}><Edit3 className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)} disabled={readOnly}><Trash2 className="h-4 w-4" /></Button>
               </div>
             ))}
           </div>
@@ -271,7 +277,7 @@ function TypesTab({ instanceId }: { instanceId: string }) {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>{t('common:cancel')}</Button>
-            <Button onClick={() => void save()} disabled={saving || !form.name.trim()}>
+            <Button onClick={() => void save()} disabled={readOnly || saving || !form.name.trim()}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}{t('actions.save')}
             </Button>
           </DialogFooter>
@@ -284,7 +290,7 @@ function TypesTab({ instanceId }: { instanceId: string }) {
           <p className="text-sm text-muted-foreground">{t('delete.description', { name: deleteTarget?.name })}</p>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>{t('common:cancel')}</Button>
-            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={deleting}>
+            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={readOnly || deleting}>
               {deleting && <Loader2 className="h-4 w-4 animate-spin" />}{t('actions.delete')}
             </Button>
           </DialogFooter>
@@ -299,6 +305,7 @@ function TypesTab({ instanceId }: { instanceId: string }) {
 // =============================================================================
 
 function EntitiesTab({ instanceId }: { instanceId: string }) {
+  const readOnly = !canEditCurrentInstance()
   const { t } = useTranslation(['ontology', 'common'])
   const { instanceRevision } = useInstanceStore()
   const [entities, setEntities] = useState<OntologyEntity[]>([])
@@ -527,7 +534,7 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
             )}
           </SelectContent>
         </Select>
-        <Button onClick={openCreate}><Plus className="h-4 w-4" />{t('actions.create')}</Button>
+        <Button onClick={openCreate} disabled={readOnly}><Plus className="h-4 w-4" />{t('actions.create')}</Button>
       </div>
 
       {error && <div className="rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error">{error}</div>}
@@ -553,24 +560,24 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
                     {item.description && <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>}
                   </button>
                   <div className="flex items-center gap-2">
-                    <Switch checked={item.searchable} onCheckedChange={() => void toggleSearchable(item)} disabled={Boolean(pendingId)} />
+                    <Switch checked={item.searchable} onCheckedChange={() => void toggleSearchable(item)} disabled={readOnly || Boolean(pendingId)} />
                     <span className="text-xs text-muted-foreground">{item.searchable ? t('searchable.on') : t('searchable.off')}</span>
                   </div>
-                  <Select value={item.status} onValueChange={(v) => void toggleStatus(item, v)} disabled={Boolean(pendingId)}>
+                  <Select value={item.status} onValueChange={(v) => void toggleStatus(item, v)} disabled={readOnly || Boolean(pendingId)}>
                     <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{t(`status.${s}`)}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Button variant="ghost" size="sm" onClick={() => openEdit(item)}><Edit3 className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)}><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => openEdit(item)} disabled={readOnly}><Edit3 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)} disabled={readOnly}><Trash2 className="h-4 w-4" /></Button>
                 </div>
                 {expandedId === item.id && (
                   <div className="border-t border-border bg-muted/30 px-4 py-3 space-y-2">
                     <p className="text-xs font-medium text-muted-foreground">{t('actions.addAlias')}</p>
                     <div className="flex gap-2">
                       <Input value={aliasText} onChange={(e) => setAliasText(e.target.value)} placeholder={t('form.aliasText')} className="h-8 text-sm" />
-                      <Button size="sm" onClick={() => void addAlias(item.id)} disabled={aliasSaving || !aliasText.trim()}>
+                      <Button size="sm" onClick={() => void addAlias(item.id)} disabled={readOnly || aliasSaving || !aliasText.trim()}>
                         {aliasSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                       </Button>
                     </div>
@@ -611,7 +618,7 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>{t('common:cancel')}</Button>
-            <Button onClick={() => void save()} disabled={saving || !form.name.trim()}>
+            <Button onClick={() => void save()} disabled={readOnly || saving || !form.name.trim()}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}{t('actions.save')}
             </Button>
           </DialogFooter>
@@ -624,7 +631,7 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
           <p className="text-sm text-muted-foreground">{t('delete.description', { name: deleteTarget?.name })}</p>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>{t('common:cancel')}</Button>
-            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={deleting}>
+            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={readOnly || deleting}>
               {deleting && <Loader2 className="h-4 w-4 animate-spin" />}{t('actions.delete')}
             </Button>
           </DialogFooter>
@@ -639,6 +646,7 @@ function EntitiesTab({ instanceId }: { instanceId: string }) {
 // =============================================================================
 
 function RelationsTab({ instanceId }: { instanceId: string }) {
+  const readOnly = !canEditCurrentInstance()
   const { t } = useTranslation(['ontology', 'common'])
   const { instanceRevision } = useInstanceStore()
   const [relations, setRelations] = useState<OntologyRelation[]>([])
@@ -795,7 +803,7 @@ function RelationsTab({ instanceId }: { instanceId: string }) {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('form.searchPlaceholder')} className="pl-9" />
         </div>
-        <Button onClick={openCreate}><Plus className="h-4 w-4" />{t('actions.create')}</Button>
+        <Button onClick={openCreate} disabled={readOnly}><Plus className="h-4 w-4" />{t('actions.create')}</Button>
       </div>
 
       {error && <div className="rounded-md border border-error/30 bg-error/10 p-3 text-sm text-error">{error}</div>}
@@ -821,17 +829,17 @@ function RelationsTab({ instanceId }: { instanceId: string }) {
                   {item.description && <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={item.searchable} onCheckedChange={() => void toggleSearchable(item)} disabled={Boolean(pendingId)} />
+                  <Switch checked={item.searchable} onCheckedChange={() => void toggleSearchable(item)} disabled={readOnly || Boolean(pendingId)} />
                   <span className="text-xs text-muted-foreground">{item.searchable ? t('searchable.on') : t('searchable.off')}</span>
                 </div>
-                <Select value={item.status} onValueChange={(v) => void toggleStatus(item, v)} disabled={Boolean(pendingId)}>
+                <Select value={item.status} onValueChange={(v) => void toggleStatus(item, v)} disabled={readOnly || Boolean(pendingId)}>
                   <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map((s) => <SelectItem key={s} value={s}>{t(`status.${s}`)}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <Button variant="ghost" size="sm" onClick={() => openEdit(item)}><Edit3 className="h-4 w-4" /></Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)}><Trash2 className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => openEdit(item)} disabled={readOnly}><Edit3 className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(item)} disabled={readOnly}><Trash2 className="h-4 w-4" /></Button>
               </div>
             ))}
           </div>
@@ -868,7 +876,7 @@ function RelationsTab({ instanceId }: { instanceId: string }) {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>{t('common:cancel')}</Button>
-            <Button onClick={() => void save()} disabled={saving || (!editing && (!form.source_entity_id || !form.target_entity_id))}>
+            <Button onClick={() => void save()} disabled={readOnly || saving || (!editing && (!form.source_entity_id || !form.target_entity_id))}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}{t('actions.save')}
             </Button>
           </DialogFooter>
@@ -881,7 +889,7 @@ function RelationsTab({ instanceId }: { instanceId: string }) {
           <p className="text-sm text-muted-foreground">{t('delete.description', { name: deleteTarget ? `${entityName(deleteTarget.source_entity_id)} → ${entityName(deleteTarget.target_entity_id)}` : '' })}</p>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>{t('common:cancel')}</Button>
-            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={deleting}>
+            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={readOnly || deleting}>
               {deleting && <Loader2 className="h-4 w-4 animate-spin" />}{t('actions.delete')}
             </Button>
           </DialogFooter>
@@ -898,6 +906,7 @@ function RelationsTab({ instanceId }: { instanceId: string }) {
 function StatsPanel({ instanceId }: { instanceId: string }) {
   const { t } = useTranslation(['ontology', 'common'])
   const { instanceRevision } = useInstanceStore()
+  const canManageInstance = canManageCurrentInstance()
   const [stats, setStats] = useState<OntologyStatsResponse | null>(null)
   const [statsRevision, setStatsRevision] = useState<number | null>(null)
   const [switchStatus, setSwitchStatus] = useState<OntologySwitchStatusResponse | null>(null)
@@ -952,7 +961,7 @@ function StatsPanel({ instanceId }: { instanceId: string }) {
   }, [reload])
 
   const toggleInstanceSwitch = async (enabled: boolean) => {
-    if (!switchStatus || !switchStatus.global_enabled || switchSaving) return
+    if (!canManageInstance || !switchStatus || !switchStatus.global_enabled || switchSaving) return
     const requestRevision = instanceRevision
     setSwitchSaving(true)
     setError(null)
@@ -1015,11 +1024,16 @@ function StatsPanel({ instanceId }: { instanceId: string }) {
                 <span className="text-xs text-muted-foreground">
                   {switchStatus.global_enabled ? t('switch.enable') : t('switch.disabled')}
                 </span>
-                <Switch
-                  checked={switchStatus.instance_enabled}
-                  onCheckedChange={(checked) => void toggleInstanceSwitch(checked)}
-                  disabled={!switchStatus.global_enabled || switchSaving}
-                />
+                <div className="text-right">
+                  <Switch
+                    checked={switchStatus.instance_enabled}
+                    onCheckedChange={(checked) => void toggleInstanceSwitch(checked)}
+                    disabled={!canManageInstance || !switchStatus.global_enabled || switchSaving}
+                  />
+                  {!canManageInstance && (
+                    <p className="mt-1 text-xs text-muted-foreground">{t('switch.ownerOnly')}</p>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -1081,6 +1095,7 @@ interface ReviewItem {
 }
 
 function ReviewTab({ instanceId }: { instanceId: string }) {
+  const readOnly = !canEditCurrentInstance()
   const { t } = useTranslation(['ontology', 'common'])
   const { instanceRevision } = useInstanceStore()
   const [items, setItems] = useState<ReviewItem[]>([])
@@ -1238,10 +1253,10 @@ function ReviewTab({ instanceId }: { instanceId: string }) {
         {selected.size > 0 && (
           <>
             <span className="text-sm text-muted-foreground">{t('review.selected', { count: selected.size })}</span>
-            <Button size="sm" onClick={() => doBatch('active')} disabled={processing}>
+            <Button size="sm" onClick={() => doBatch('active')} disabled={readOnly || processing}>
               <CheckCircle className="h-4 w-4 mr-1" />{t('review.batchApprove')}
             </Button>
-            <Button size="sm" variant="destructive" onClick={() => doBatch('deprecated')} disabled={processing}>
+            <Button size="sm" variant="destructive" onClick={() => doBatch('deprecated')} disabled={readOnly || processing}>
               <XCircle className="h-4 w-4 mr-1" />{t('review.batchReject')}
             </Button>
           </>

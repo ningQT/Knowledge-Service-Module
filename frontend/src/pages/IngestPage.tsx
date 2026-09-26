@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Upload, FileText, Loader2, StopCircle } from 'lucide-react'
-import { isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
+import { canEditCurrentInstance, isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
 import { useIngestStore } from '@/stores/useIngestStore'
 import { useSSE } from '@/hooks/useSSE'
 import { ingestAsync, getJob, getJobSSEUrl, createJobSSEToken, cancelJob } from '@/services/ingest'
@@ -62,7 +62,8 @@ export default function IngestPage() {
   // S-04: SSE 轮询回退机制
   const [polling, setPolling] = useState(false)
   const pollingRef = useRef(false)
-  const uploadDisabled = !instanceId || submitting || status === 'running'
+  const readOnly = Boolean(instanceId && !canEditCurrentInstance())
+  const uploadDisabled = !instanceId || submitting || status === 'running' || readOnly
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -298,6 +299,7 @@ export default function IngestPage() {
               id="auto-map"
               checked={autoMap}
               onCheckedChange={setAutoMap}
+              disabled={readOnly}
             />
             <label htmlFor="auto-map" className="text-sm">
               {t('form.autoMap')}
@@ -306,7 +308,7 @@ export default function IngestPage() {
 
           <Button
             onClick={handleSubmit}
-            disabled={!file || !instanceId || submitting || status === 'running'}
+            disabled={!file || !instanceId || submitting || status === 'running' || readOnly}
             className="w-full"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
@@ -318,6 +320,7 @@ export default function IngestPage() {
               onClick={() => setCancelOpen(true)}
               variant="destructive"
               className="w-full"
+              disabled={readOnly}
             >
               <StopCircle className="w-4 h-4" />
               {t('action.cancelIngest')}

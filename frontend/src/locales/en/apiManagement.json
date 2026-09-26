@@ -75,7 +75,8 @@
       "instances": "Authorized Knowledge Bases",
       "noInstances": "There are no knowledge bases to authorize yet.",
       "cancel": "Cancel",
-      "save": "Save Permissions"
+      "save": "Save Permissions",
+      "scope": "Permission Scope"
     },
     "confirm": {
       "rotate": "Rotate this API key? The old key will stop working immediately.",
@@ -83,7 +84,9 @@
     },
     "error": {
       "nameRequired": "API key name is required"
-    }
+    },
+    "owner": "Owner: {{username}}",
+    "boundInstances": "Bound instances: {{names}}"
   },
   "quickStart": {
     "title": "Recommended integration path",

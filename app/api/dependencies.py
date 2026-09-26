@@ -140,6 +140,7 @@ def get_auth_service() -> AuthService:
 
 def get_ontology_service() -> OntologyService:
     from app.pipeline.query_dictionary import invalidate_query_caches
+
     return OntologyService(get_db(), on_change=invalidate_query_caches)
 
 
@@ -207,13 +208,27 @@ async def require_admin_context(request: Request) -> AuthContext:
     return context
 
 
+async def require_console_context(request: Request) -> AuthContext:
+    """Require a browser console session; API keys are not accepted."""
+    context = await require_auth_context(request)
+    if not context.is_console:
+        log_event(
+            logger,
+            "auth.denied",
+            reason="console_required",
+            auth_kind=context.kind,
+        )
+        raise HTTPException(status_code=403, detail="Console access required")
+    return context
+
+
 async def require_read_context(request: Request) -> AuthContext:
-    """Require read access through either admin session or API key."""
+    """Require read access through a console session or API key."""
     return await require_auth_context(request)
 
 
 async def require_write_context(request: Request) -> AuthContext:
-    """Require write access through admin session or a write-scoped API key."""
+    """Require at least one effective instance write capability."""
     context = await require_auth_context(request)
     if not context.can_write:
         log_event(
@@ -223,25 +238,14 @@ async def require_write_context(request: Request) -> AuthContext:
             auth_kind=context.kind,
             scope=context.scope,
         )
-        raise HTTPException(status_code=403, detail="API key scope is not allowed")
+        raise HTTPException(status_code=403, detail="Write access required")
     return context
 
 
 def ensure_instance_access(context: AuthContext, instance_id: str, *, write: bool = False) -> None:
-    """Validate API key access to a specific instance; admins are unrestricted."""
-    if context.is_admin:
-        return
-    if write and not context.can_write:
-        log_event(
-            logger,
-            "auth.instance_access.denied",
-            reason="write_scope_required",
-            auth_kind=context.kind,
-            scope=context.scope,
-            instance_id=instance_id,
-        )
-        raise HTTPException(status_code=403, detail="API key scope is not allowed")
-    if instance_id not in context.instance_ids:
+    """Validate effective access to a specific instance."""
+    permission = context.permission_for(instance_id)
+    if permission is None:
         log_event(
             logger,
             "auth.instance_access.denied",
@@ -250,7 +254,17 @@ def ensure_instance_access(context: AuthContext, instance_id: str, *, write: boo
             scope=context.scope,
             instance_id=instance_id,
         )
-        raise HTTPException(status_code=403, detail="API key instance access is not allowed")
+        raise HTTPException(status_code=403, detail="Instance access is not allowed")
+    if write and permission != "edit":
+        log_event(
+            logger,
+            "auth.instance_access.denied",
+            reason="edit_permission_required",
+            auth_kind=context.kind,
+            scope=context.scope,
+            instance_id=instance_id,
+        )
+        raise HTTPException(status_code=403, detail="Edit permission is required")
 
 
 def restrict_instance_ids(context: AuthContext, requested: list[str] | None) -> list[str] | None:
@@ -273,7 +287,7 @@ def restrict_instance_ids(context: AuthContext, requested: list[str] | None) -> 
             requested_count=len(requested_set),
             allowed_count=len(context.instance_ids),
         )
-        raise HTTPException(status_code=403, detail="API key instance access is not allowed")
+        raise HTTPException(status_code=403, detail="Instance access is not allowed")
     return list(dict.fromkeys(requested))
 
 

@@ -3,6 +3,7 @@ import { CheckCircle, ExternalLink, Eye, EyeOff, Loader2, XCircle } from 'lucide
 import { getLLMSettings, resetLLMSettings, testLLMConnection, updateLLMSettings } from '@/services/settings'
 import type { LLMProviderOption, LLMSettings, LLMTestResult } from '@/types/api'
 import { LoadingState } from '@/components/shared/LoadingState'
+import { AccountManager } from '@/components/accounts/AccountManager'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
@@ -15,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import { formatApiError, formatLLMTestError } from '@/lib/i18nFormat'
 import { useTranslation } from 'react-i18next'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<LLMSettings | null>(null)
@@ -24,7 +26,9 @@ export default function SettingsPage() {
   const [testResult, setTestResult] = useState<LLMTestResult | null>(null)
   const [showApiKey, setShowApiKey] = useState(false)
   const [error, setError] = useState('')
+  const [activeSection, setActiveSection] = useState<'model' | 'accounts'>('model')
   const { t } = useTranslation('settings')
+  const user = useAuthStore((state) => state.user)
 
   const [provider, setProvider] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
@@ -127,6 +131,14 @@ export default function SettingsPage() {
     setTesting(false)
   }
 
+  if (user?.role !== 'admin') {
+    return (
+      <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
+        {t('forbidden')}
+      </div>
+    )
+  }
+
   if (loading) return <LoadingState />
 
   const providerOptions = settings?.provider_options ?? []
@@ -146,6 +158,17 @@ export default function SettingsPage() {
         </div>
       )}
 
+      <div className="flex gap-2">
+        <Button variant={activeSection === 'model' ? 'default' : 'secondary'} onClick={() => setActiveSection('model')}>
+          {t('tabs.model')}
+        </Button>
+        <Button variant={activeSection === 'accounts' ? 'default' : 'secondary'} onClick={() => setActiveSection('accounts')}>
+          {t('tabs.accounts')}
+        </Button>
+      </div>
+
+      {activeSection === 'model' ? (
+        <>
       <div className="bg-card rounded-lg border border-border p-6 space-y-5">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div>
@@ -310,6 +333,10 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+        </>
+      ) : (
+        <AccountManager />
+      )}
     </div>
   )
 

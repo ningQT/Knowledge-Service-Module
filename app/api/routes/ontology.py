@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import (
     ensure_instance_access,
-    get_db,
+    get_auth_service,
     get_ontology_service,
+    require_console_context,
     require_read_context,
     require_write_context,
 )
@@ -335,7 +336,11 @@ async def create_entity_alias(
     try:
         svc.auto_bridge_entity(instance_id, entity_id, extra_terms=[req.alias_text])
     except Exception:
-        logger.warning("Auto-bridge after alias creation failed for entity %s", entity_id, exc_info=True)
+        logger.warning(
+            "Auto-bridge after alias creation failed for entity %s",
+            entity_id,
+            exc_info=True,
+        )
     return OntologyAliasResponse(**alias)
 
 
@@ -403,7 +408,13 @@ async def list_ontology_relations(
     ensure_instance_access(auth, instance_id)
     svc = get_ontology_service()
     try:
-        relations = svc.list_relations(instance_id, entity_id=entity_id, relation_type=relation_type, status=status, source=source)
+        relations = svc.list_relations(
+            instance_id,
+            entity_id=entity_id,
+            relation_type=relation_type,
+            status=status,
+            source=source,
+        )
     except OntologyNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     return OntologyRelationListResponse(
@@ -501,7 +512,12 @@ async def delete_ontology_relation(
         svc.delete_relation(instance_id, relation_id)
     except OntologyNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    log_event(logger, "ontology.relation.delete.done", instance_id=instance_id, relation_id=relation_id)
+    log_event(
+        logger,
+        "ontology.relation.delete.done",
+        instance_id=instance_id,
+        relation_id=relation_id,
+    )
     return IdDeleteResponse(deleted=True, id=relation_id)
 
 
@@ -700,7 +716,8 @@ async def get_ontology_switch_status(
     if rows:
         import json
         try:
-            config = json.loads(rows[0].get("config_json", "{}")) if isinstance(rows[0].get("config_json"), str) else {}
+            raw_config = rows[0].get("config_json")
+            config = json.loads(raw_config) if isinstance(raw_config, str) else {}
         except (json.JSONDecodeError, TypeError):
             config = {}
         instance_enabled = bool(config.get("ontology_enabled", True))
@@ -725,10 +742,13 @@ async def get_ontology_switch_status(
 )
 async def enable_ontology_for_instance(
     instance_id: str,
-    auth=Depends(require_write_context),
+    auth=Depends(require_console_context),
 ):
     """Enable ontology for a specific instance."""
-    ensure_instance_access(auth, instance_id, write=True)
+    if not get_auth_service().can_manage_instance(
+        auth.user_id or "", instance_id, is_admin=auth.is_admin
+    ):
+        raise HTTPException(status_code=403, detail="Instance access is denied")
     db = get_ontology_service().db
     _set_instance_ontology_switch(db, instance_id, True)
     return {"enabled": True, "instance_id": instance_id}
@@ -739,10 +759,13 @@ async def enable_ontology_for_instance(
 )
 async def disable_ontology_for_instance(
     instance_id: str,
-    auth=Depends(require_write_context),
+    auth=Depends(require_console_context),
 ):
     """Disable ontology for a specific instance."""
-    ensure_instance_access(auth, instance_id, write=True)
+    if not get_auth_service().can_manage_instance(
+        auth.user_id or "", instance_id, is_admin=auth.is_admin
+    ):
+        raise HTTPException(status_code=403, detail="Instance access is denied")
     db = get_ontology_service().db
     _set_instance_ontology_switch(db, instance_id, False)
     return {"enabled": False, "instance_id": instance_id}
@@ -758,7 +781,8 @@ def _set_instance_ontology_switch(db, instance_id: str, enabled: bool) -> None:
         raise HTTPException(status_code=404, detail="Instance not found")
 
     try:
-        config = json.loads(rows[0].get("config_json", "{}")) if isinstance(rows[0].get("config_json"), str) else rows[0].get("config_json") or {}
+        raw_config = rows[0].get("config_json")
+        config = json.loads(raw_config) if isinstance(raw_config, str) else raw_config or {}
     except (json.JSONDecodeError, TypeError):
         config = {}
 

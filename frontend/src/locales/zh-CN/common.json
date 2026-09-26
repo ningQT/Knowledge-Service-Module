@@ -119,5 +119,60 @@
     "API_KEY_INVALID": "API Key 无效",
     "API_KEY_SCOPE_FORBIDDEN": "API Key 权限范围不足",
     "REQUEST_FAILED": "请求失败"
+  },
+  "account": {
+    "management": "账户管理",
+    "managementDescription": "创建、启停和管理普通账户。",
+    "create": "新建账户",
+    "createTitle": "创建普通账户",
+    "createDescription": "只填写账户基本信息，实例权限请在知识库实例中配置。",
+    "username": "用户名",
+    "initialPassword": "初始密码（至少 8 位）",
+    "enabled": "启用",
+    "disabled": "停用",
+    "resetPassword": "重置密码",
+    "resetPrompt": "为 {{username}} 设置新密码（至少 8 位）",
+    "delete": "删除",
+    "deleteTitle": "删除普通账户",
+    "deleteDescription": "将删除该账户全部 API Key，未删除实例转给管理员；其他账户绑定这些实例的 API Key 和相关授权保持不变。请输入用户名 {{username}} 确认。",
+    "confirmUsername": "输入用户名",
+    "empty": "暂无普通账户",
+    "createAction": "创建"
+  },
+  "personalCenter": {
+    "title": "个人中心",
+    "description": "查看账户信息并修改密码。",
+    "administrator": "管理员",
+    "user": "普通账户",
+    "changePassword": "修改密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码（至少 8 位）",
+    "confirmPassword": "确认新密码",
+    "passwordMismatch": "两次输入的新密码不一致",
+    "savePassword": "保存新密码"
+  },
+  "permissions": {
+    "dialogTitle": "实例权限：{{name}}",
+    "dialogDescription": "为普通账户设置只读或编辑权限，所有者固定拥有编辑权。",
+    "owner": "所有者",
+    "none": "无权限",
+    "read": "只读",
+    "edit": "编辑",
+    "affectedKeys": "{{count}} Key",
+    "removeKeysConfirm": "本次变更将移除 {{count}} 个 API Key 绑定，是否继续？",
+    "save": "保存权限",
+    "emptyAccounts": "暂无普通账户",
+    "readOnly": "当前为只读权限，写操作不可用。"
+  },
+  "boundApiKeys": {
+    "title": "已绑定 API Key：{{name}}",
+    "description": "仅展示归属和权限摘要，不显示 Key secret。",
+    "read": "只读",
+    "write": "读写",
+    "enabled": "启用",
+    "disabled": "停用",
+    "empty": "暂无绑定 Key",
+    "lastUsed": "最近使用：{{value}}",
+    "neverUsed": "从未使用"
   }
 }

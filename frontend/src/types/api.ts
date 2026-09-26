@@ -2,11 +2,17 @@
 
 export type { GraphNode, GraphEdge, GraphData } from './graph'
 
+export type InstanceAccessLevel = 'admin' | 'owner' | 'edit' | 'read'
+
 export interface Instance {
   id: string
   name: string
   template_id: string
   vault_path: string | null
+  owner_account_id?: string | null
+  access_level?: InstanceAccessLevel | null
+  can_edit?: boolean
+  can_manage?: boolean
   auto_map: boolean
   language: 'zh' | 'en'
   created_at: string
@@ -16,6 +22,8 @@ export interface Instance {
 export interface AuthUser {
   id: string
   username: string
+  role: 'admin' | 'user'
+  enabled: boolean
   created_at?: string | null
   updated_at?: string | null
 }
@@ -37,9 +45,43 @@ export interface ApiKeyClient {
   key_prefix: string
   scope: 'read' | 'write'
   enabled: boolean
+  owner_account_id?: string | null
+  owner_username?: string | null
   instance_ids: string[]
+  eligible_instance_ids?: string[]
   created_at: string
   updated_at: string
+  last_used_at: string | null
+}
+
+export interface AccountSummary extends AuthUser {
+  created_at: string
+  updated_at: string
+}
+
+export interface InstancePermissionAccount {
+  account_id: string
+  username: string
+  enabled: boolean
+  permission: 'none' | 'read' | 'edit'
+  affected_api_key_count: number
+}
+
+export interface InstancePermissionResponse {
+  instance_id: string
+  instance_name: string
+  owner: { account_id: string; username: string; permission: 'owner' }
+  accounts: InstancePermissionAccount[]
+}
+
+export interface BoundApiKey {
+  id: string
+  name: string
+  key_prefix: string
+  scope: 'read' | 'write'
+  enabled: boolean
+  owner_account_id: string
+  owner_username: string
   last_used_at: string | null
 }
 

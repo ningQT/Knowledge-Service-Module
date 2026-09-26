@@ -60,5 +60,10 @@
     "model": "Model",
     "baseUrl": "Base URL",
     "missing": "Missing required fields: {{fields}}. LLM features will be unavailable until configuration is complete."
-  }
+  },
+  "tabs": {
+    "model": "Model Settings",
+    "accounts": "Account Management"
+  },
+  "forbidden": "The current account is not allowed to access system settings."
 }

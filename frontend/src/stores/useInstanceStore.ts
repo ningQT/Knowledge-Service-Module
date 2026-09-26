@@ -56,3 +56,36 @@ export const useInstanceStore = create<InstanceStore>((set) => ({
 export function isInstanceRevisionCurrent(revision: number): boolean {
   return useInstanceStore.getState().instanceRevision === revision
 }
+
+/**
+ * 获取当前实例的权限级别。
+ *
+ * @returns 当前实例权限；未选择或未授权时返回 null
+ */
+export function getCurrentPermission(): 'admin' | 'owner' | 'edit' | 'read' | null {
+  const state = useInstanceStore.getState()
+  const instance = state.instances.find((item) => item.id === state.instanceId)
+  return instance?.access_level || null
+}
+
+/**
+ * 判断当前实例是否可编辑。
+ *
+ * @returns 当前实例允许编辑时返回 true
+ */
+export function canEditCurrentInstance(): boolean {
+  const state = useInstanceStore.getState()
+  const instance = state.instances.find((item) => item.id === state.instanceId)
+  return Boolean(instance?.can_edit)
+}
+
+/**
+ * 判断当前实例是否可管理。
+ *
+ * @returns 当前实例允许改名、删除或配置权限时返回 true
+ */
+export function canManageCurrentInstance(): boolean {
+  const state = useInstanceStore.getState()
+  const instance = state.instances.find((item) => item.id === state.instanceId)
+  return Boolean(instance?.can_manage)
+}

@@ -38,5 +38,6 @@
   },
   "relatedNodes": {
     "title": "Related Notes"
-  }
+  },
+  "readOnly": "Read-only access is active. Note editing, review, and deletion are unavailable."
 }

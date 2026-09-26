@@ -75,7 +75,8 @@
       "instances": "授权知识库",
       "noInstances": "还没有可授权的知识库。",
       "cancel": "取消",
-      "save": "保存权限"
+      "save": "保存权限",
+      "scope": "权限范围"
     },
     "confirm": {
       "rotate": "确定要轮换这个 API Key 吗？旧 Key 会立即失效。",
@@ -83,7 +84,9 @@
     },
     "error": {
       "nameRequired": "API Key 名称不能为空"
-    }
+    },
+    "owner": "所属账户：{{username}}",
+    "boundInstances": "绑定知识库：{{names}}"
   },
   "quickStart": {
     "title": "推荐接入流程",

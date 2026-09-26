@@ -48,11 +48,23 @@
     "confirmDelete": "Delete",
     "cancel": "Cancel",
     "updated": "Knowledge base updated",
-    "deleted": "Knowledge base deleted"
+    "deleted": "Knowledge base deleted",
+    "permissions": "Instance Permissions",
+    "boundApiKeys": "Bound API Keys",
+    "deleteImpactText": "This removes all permissions and API key bindings for the instance. Enter instance name {{name}} to confirm.",
+    "deleteNamePlaceholder": "Enter instance name",
+    "deleteImpactCounts": "This removes {{accounts}} account permissions and {{keys}} API key bindings.",
+    "deleteImpactLoading": "Calculating deletion impact..."
   },
   "action": {
     "upload": "Upload Document",
     "search": "Search",
     "graph": "Open Graph"
+  },
+  "permission": {
+    "admin": "Admin",
+    "owner": "Owner",
+    "edit": "Edit",
+    "read": "Read-only"
   }
 }

@@ -66,5 +66,8 @@
       "weak_map_structure": "Map",
       "high_unreviewed_ratio": "Review"
     }
+  },
+  "permissions": {
+    "readOnly": "Read-only access is active. Write operations are unavailable."
   }
 }

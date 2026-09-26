@@ -97,6 +97,7 @@
     "enable": "启用本体",
     "disable": "禁用本体",
     "enabled": "已启用",
-    "disabled": "已禁用"
+    "disabled": "已禁用",
+    "ownerOnly": "仅管理员或实例所有者可启停实例本体。"
   }
 }

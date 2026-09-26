@@ -66,5 +66,8 @@
       "weak_map_structure": "地图",
       "high_unreviewed_ratio": "审核"
     }
+  },
+  "permissions": {
+    "readOnly": "当前为只读权限，写操作不可用。"
   }
 }

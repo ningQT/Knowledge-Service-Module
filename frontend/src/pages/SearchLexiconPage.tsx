@@ -16,7 +16,7 @@ import {
   listSearchLexicon,
   updateSearchLexicon,
 } from '@/services/searchLexicon'
-import { isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
+import { canEditCurrentInstance, isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
 import type { SearchLexiconEntry, SearchLexiconRelationType } from '@/types/api'
 
 const ALL = 'all'
@@ -63,6 +63,7 @@ function entryToForm(entry: SearchLexiconEntry): FormState {
 export default function SearchLexiconPage() {
   const { t } = useTranslation(['searchLexicon', 'common'])
   const { instanceId, instanceRevision } = useInstanceStore()
+  const readOnly = Boolean(instanceId && !canEditCurrentInstance())
   const [entries, setEntries] = useState<SearchLexiconEntry[]>([])
   const [entriesRevision, setEntriesRevision] = useState<number | null>(null)
   const [filter, setFilter] = useState<string>(ALL)
@@ -225,7 +226,7 @@ export default function SearchLexiconPage() {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
         </div>
-        <Button onClick={openCreate}>
+        <Button onClick={openCreate} disabled={readOnly}>
           <Plus className="h-4 w-4" />
           {t('actions.create')}
         </Button>
@@ -277,14 +278,14 @@ export default function SearchLexiconPage() {
                   {entry.notes && <p className="mt-2 text-xs text-muted-foreground">{entry.notes}</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Switch checked={entry.enabled} onCheckedChange={() => void toggleEntry(entry)} disabled={Boolean(pendingEntryId)} />
+                  <Switch checked={entry.enabled} onCheckedChange={() => void toggleEntry(entry)} disabled={readOnly || Boolean(pendingEntryId)} />
                   <span className="text-xs text-muted-foreground">{entry.enabled ? t('status.enabled') : t('status.disabled')}</span>
                 </div>
-                <Button variant="ghost" onClick={() => openEdit(entry)}>
+                <Button variant="ghost" onClick={() => openEdit(entry)} disabled={readOnly}>
                   <Edit3 className="h-4 w-4" />
                   {t('actions.edit')}
                 </Button>
-                <Button variant="ghost" onClick={() => setDeleteTarget(entry)}>
+                <Button variant="ghost" onClick={() => setDeleteTarget(entry)} disabled={readOnly}>
                   <Trash2 className="h-4 w-4" />
                   {t('actions.delete')}
                 </Button>
@@ -320,7 +321,7 @@ export default function SearchLexiconPage() {
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>{t('common:cancel')}</Button>
-            <Button onClick={() => void saveEntry()} disabled={saving || hasInvalidTerms}>
+            <Button onClick={() => void saveEntry()} disabled={readOnly || saving || hasInvalidTerms}>
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('actions.save')}
             </Button>
@@ -336,7 +337,7 @@ export default function SearchLexiconPage() {
           <p className="text-sm text-muted-foreground">{t('delete.description', { term: deleteTarget?.canonical_term })}</p>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleting}>{t('common:cancel')}</Button>
-            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={deleting}>
+            <Button variant="destructive" onClick={() => void confirmDelete()} disabled={readOnly || deleting}>
               {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('actions.delete')}
             </Button>

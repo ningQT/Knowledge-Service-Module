@@ -30,9 +30,10 @@ from app.api.models import (
     SseTokenResponse,
 )
 from app.config import get_settings
+from app.core.job_access import job_access_registry
+from app.observability import log_event, query_hash
 from app.pipeline.answer_models import AnswerResult
 from app.pipeline.answer_pipeline import ANSWER_STEP_NAMES
-from app.observability import log_event, query_hash
 from app.security.sse_tokens import sse_token_store
 
 router = APIRouter(prefix="/api/v1", tags=["search"])
@@ -146,7 +147,11 @@ async def search_knowledge(req: SearchRequest, auth=Depends(require_read_context
             search_path=result.stats.search_path,
             map_sourced_count=result.stats.map_sourced_count,
         ),
-        comprehension=result.comprehension.model_dump(mode="json") if result.comprehension else None,
+        comprehension=(
+            result.comprehension.model_dump(mode="json")
+            if result.comprehension
+            else None
+        ),
     )
 
 
@@ -222,6 +227,12 @@ async def start_search_answer_job(req: SearchAnswerRequest, auth=Depends(require
     with _answer_jobs_lock:
         _answer_jobs[job_id] = job
         _cleanup_old_answer_jobs()
+    job_access_registry.register(
+        job_id,
+        auth.user_id or auth.client_id or "",
+        instance_ids or sorted(auth.instance_ids),
+        "read",
+    )
 
     log_event(
         logger,
@@ -282,7 +293,10 @@ async def search_answer_job_sse(
 
     async def event_generator():
         try:
-            yield {"event": "job_start", "data": json.dumps({"job_id": job.job_id, "status": job.status})}
+            yield {
+                "event": "job_start",
+                "data": json.dumps({"job_id": job.job_id, "status": job.status}),
+            }
             with job.lock:
                 for step in job.steps:
                     if step["status"] in {"running", "completed", "failed"}:
@@ -292,6 +306,19 @@ async def search_answer_job_sse(
                     return
 
             while True:
+                if job_access_registry.cancellation_reason(job.job_id):
+                    yield {
+                        "event": "job_failed",
+                        "data": json.dumps(
+                            {
+                                "job_id": job.job_id,
+                                "error": job_access_registry.cancellation_reason(
+                                    job.job_id
+                                ),
+                            }
+                        ),
+                    }
+                    return
                 event = await queue.get()
                 if event is None:
                     break
@@ -338,7 +365,11 @@ def _cleanup_old_answer_jobs() -> None:
     for job_id, job in _answer_jobs.items():
         if job.status in {"success", "failed"}:
             try:
-                started = datetime.fromisoformat(job.started_at).timestamp() if job.started_at else 0
+                started = (
+                    datetime.fromisoformat(job.started_at).timestamp()
+                    if job.started_at
+                    else 0
+                )
             except (TypeError, ValueError):
                 started = 0
             if now - started > 3600:
@@ -447,7 +478,11 @@ async def _run_answer_background(job: AnswerJobState, req: SearchAnswerRequest) 
         elif status in {"completed", "failed"}:
             log_event(
                 logger,
-                "process.answer.step.done" if status == "completed" else "process.answer.step.error",
+                (
+                    "process.answer.step.done"
+                    if status == "completed"
+                    else "process.answer.step.error"
+                ),
                 level=logging.INFO if status == "completed" else logging.ERROR,
                 job_id=job.job_id,
                 step=step,
@@ -535,7 +570,10 @@ async def _run_answer_background(job: AnswerJobState, req: SearchAnswerRequest) 
             )
             _push_answer_event(
                 job,
-                {"event": "job_failed", "data": json.dumps({"job_id": job.job_id, "error": str(exc)})},
+                {
+                    "event": "job_failed",
+                    "data": json.dumps({"job_id": job.job_id, "error": str(exc)}),
+                },
             )
         finally:
             if db is not None:
@@ -548,4 +586,7 @@ async def _run_answer_background(job: AnswerJobState, req: SearchAnswerRequest) 
                 except asyncio.QueueFull:
                     pass
 
-    await asyncio.to_thread(_execute)
+    try:
+        await asyncio.to_thread(_execute)
+    finally:
+        job_access_registry.unregister(job.job_id)

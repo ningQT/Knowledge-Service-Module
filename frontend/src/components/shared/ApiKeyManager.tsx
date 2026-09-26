@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Copy, KeyRound, Loader2, Pencil, Power, PowerOff, RefreshCw, Trash2 } from 'lucide-react'
 import {
   createApiKey,
@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatApiError } from '@/lib/i18nFormat'
+import { useAuthStore } from '@/stores/useAuthStore'
 import { useTranslation } from 'react-i18next'
 
 export interface ApiKeyManagerSummary {
@@ -69,6 +70,7 @@ function summarizeApiKeys(keys: ApiKeyClient[], instances: Instance[]): ApiKeyMa
 
 export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
   const { t } = useTranslation(['apiManagement', 'common'])
+  const isAdmin = useAuthStore((state) => state.user?.role === 'admin')
   const [apiKeys, setApiKeys] = useState<ApiKeyClient[]>([])
   const [instances, setInstances] = useState<Instance[]>([])
   const [apiKeysLoading, setApiKeysLoading] = useState(true)
@@ -78,22 +80,37 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
   const [secretCopyStatus, setSecretCopyStatus] = useState<'copied' | 'failed' | null>(null)
   const [editingApiKey, setEditingApiKey] = useState<ApiKeyClient | null>(null)
   const [editingInstanceIds, setEditingInstanceIds] = useState<string[]>([])
+  const [editingScope, setEditingScope] = useState<'read' | 'write'>('read')
   const [newKeyName, setNewKeyName] = useState('')
   const [newKeyScope, setNewKeyScope] = useState<'read' | 'write'>('read')
   const [newKeyInstanceIds, setNewKeyInstanceIds] = useState<string[]>([])
 
-  const updateSummary = useCallback((keys: ApiKeyClient[], instanceList = instances) => {
+  const eligibleInstances = useMemo(
+    () => instances.filter((instance) => instance.can_edit === true),
+    [instances]
+  )
+
+  const editingEligibleInstances = useMemo(() => {
+    if (!editingApiKey) return []
+    const eligibleIds = new Set(
+      editingApiKey.eligible_instance_ids ?? eligibleInstances.map((instance) => instance.id)
+    )
+    return instances.filter((instance) => eligibleIds.has(instance.id))
+  }, [editingApiKey, eligibleInstances, instances])
+
+  const updateSummary = useCallback((keys: ApiKeyClient[], instanceList = eligibleInstances) => {
     onSummaryChange?.(summarizeApiKeys(keys, instanceList))
-  }, [instances, onSummaryChange])
+  }, [eligibleInstances, onSummaryChange])
 
   const loadApiKeySection = useCallback(async () => {
     setApiKeysLoading(true)
     setApiKeyError('')
     try {
       const [keys, instanceList] = await Promise.all([listApiKeys(), listInstances()])
+      const legalInstances = instanceList.filter((instance) => instance.can_edit === true)
       setApiKeys(keys)
       setInstances(instanceList)
-      onSummaryChange?.(summarizeApiKeys(keys, instanceList))
+      onSummaryChange?.(summarizeApiKeys(keys, legalInstances))
     } catch (e) {
       setApiKeyError(formatApiError(t, e))
     }
@@ -217,7 +234,11 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
   function openEditApiKey(key: ApiKeyClient) {
     setApiKeyError('')
     setEditingApiKey(key)
-    setEditingInstanceIds(key.instance_ids)
+    setEditingScope(key.scope)
+    const eligibleIds = new Set(
+      key.eligible_instance_ids ?? eligibleInstances.map((instance) => instance.id)
+    )
+    setEditingInstanceIds(key.instance_ids.filter((id) => eligibleIds.has(id)))
   }
 
   function toggleEditingInstance(instanceId: string) {
@@ -233,7 +254,10 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
     setApiKeyBusy(`edit:${editingApiKey.id}`)
     setApiKeyError('')
     try {
-      const updated = await updateApiKey(editingApiKey.id, { instance_ids: editingInstanceIds })
+      const updated = await updateApiKey(editingApiKey.id, {
+        scope: editingScope,
+        instance_ids: editingInstanceIds,
+      })
       const nextKeys = apiKeys.map((item) => item.id === updated.id ? updated : item)
       setApiKeys(nextKeys)
       updateSummary(nextKeys)
@@ -295,11 +319,11 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
 
         <div>
           <div className="mb-2 text-sm font-medium">{t('apiKeys.create.instances')}</div>
-          {instances.length === 0 ? (
+          {eligibleInstances.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t('apiKeys.create.noInstances')}</p>
           ) : (
             <div className="grid gap-2 md:grid-cols-2">
-              {instances.map((instance) => (
+              {eligibleInstances.map((instance) => (
                 <label
                   key={instance.id}
                   className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
@@ -332,7 +356,11 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
         ) : apiKeys.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('apiKeys.empty')}</p>
         ) : (
-          apiKeys.map((key) => (
+          apiKeys.map((key) => {
+            const boundNames = key.instance_ids.map(
+              (id) => instances.find((instance) => instance.id === id)?.name ?? id
+            )
+            return (
             <div key={key.id} className="rounded-md border border-border p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0">
@@ -344,6 +372,12 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
                     <Badge variant="outline">{t(`apiKeys.scope.${key.scope}`)}</Badge>
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
+                    {isAdmin && key.owner_username && (
+                      <>
+                        {t('apiKeys.owner', { username: key.owner_username })}
+                        <span className="mx-1">/</span>
+                      </>
+                    )}
                     {key.key_prefix}...
                     <span className="mx-1">/</span>
                     {t('apiKeys.instancesCount', { count: key.instance_ids.length })}
@@ -352,6 +386,11 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
                       ? t('apiKeys.lastUsed', { value: new Date(key.last_used_at).toLocaleString() })
                       : t('apiKeys.neverUsed')}
                   </div>
+                  {boundNames.length > 0 && (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {t('apiKeys.boundInstances', { names: boundNames.join(', ') })}
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
@@ -393,7 +432,8 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
                 </div>
               </div>
             </div>
-          ))
+            )
+          })
         )}
       </div>
 
@@ -428,14 +468,31 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
               </div>
 
               <div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">{t('apiKeys.edit.scope')}</label>
+                  <Select
+                    value={editingScope}
+                    onValueChange={(value) => setEditingScope(value as 'read' | 'write')}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="read">{t('apiKeys.scope.read')}</SelectItem>
+                      <SelectItem value="write">{t('apiKeys.scope.write')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
                 <div className="mb-2 text-sm font-medium">{t('apiKeys.edit.instances')}</div>
-                {instances.length === 0 ? (
+                {editingEligibleInstances.length === 0 ? (
                   <p className="rounded-md border border-border px-3 py-2 text-sm text-muted-foreground">
                     {t('apiKeys.edit.noInstances')}
                   </p>
                 ) : (
                   <div className="grid max-h-64 gap-2 overflow-auto pr-1 md:grid-cols-2">
-                    {instances.map((instance) => (
+                    {editingEligibleInstances.map((instance) => (
                       <label
                         key={instance.id}
                         className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm"
@@ -451,6 +508,7 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
                     ))}
                   </div>
                 )}
+                </div>
               </div>
 
               <DialogFooter>
@@ -465,7 +523,7 @@ export function ApiKeyManager({ onSummaryChange }: ApiKeyManagerProps) {
                 </Button>
                 <Button
                   onClick={handleSaveApiKeyPermissions}
-                  disabled={instances.length === 0 || apiKeyBusy === `edit:${editingApiKey.id}`}
+                  disabled={apiKeyBusy === `edit:${editingApiKey.id}`}
                 >
                   {apiKeyBusy === `edit:${editingApiKey.id}` && <Loader2 className="animate-spin" />}
                   {t('apiKeys.edit.save')}

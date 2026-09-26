@@ -119,5 +119,60 @@
     "API_KEY_INVALID": "Invalid API key",
     "API_KEY_SCOPE_FORBIDDEN": "The API key scope is not sufficient",
     "REQUEST_FAILED": "Request failed"
+  },
+  "account": {
+    "management": "Account Management",
+    "managementDescription": "Create, enable, disable, and manage regular accounts.",
+    "create": "New Account",
+    "createTitle": "Create Regular Account",
+    "createDescription": "Enter only basic account information. Configure instance permissions from the instance itself.",
+    "username": "Username",
+    "initialPassword": "Initial password (at least 8 characters)",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "resetPassword": "Reset Password",
+    "resetPrompt": "Set a new password for {{username}} (at least 8 characters)",
+    "delete": "Delete",
+    "deleteTitle": "Delete Regular Account",
+    "deleteDescription": "This deletes all API keys for the account and transfers undeleted instances to the administrator. API key bindings and permissions that other accounts hold on those instances remain unchanged. Enter username {{username}} to confirm.",
+    "confirmUsername": "Enter username",
+    "empty": "No regular accounts",
+    "createAction": "Create"
+  },
+  "personalCenter": {
+    "title": "Personal Center",
+    "description": "View account information and change your password.",
+    "administrator": "Administrator",
+    "user": "Regular account",
+    "changePassword": "Change Password",
+    "currentPassword": "Current password",
+    "newPassword": "New password (at least 8 characters)",
+    "confirmPassword": "Confirm new password",
+    "passwordMismatch": "The new passwords do not match.",
+    "savePassword": "Save New Password"
+  },
+  "permissions": {
+    "dialogTitle": "Instance Permissions: {{name}}",
+    "dialogDescription": "Configure read-only or edit access for regular accounts. The owner always has edit access.",
+    "owner": "Owner",
+    "none": "No access",
+    "read": "Read-only",
+    "edit": "Edit",
+    "affectedKeys": "{{count}} keys",
+    "removeKeysConfirm": "This change will remove {{count}} API key bindings. Continue?",
+    "save": "Save Permissions",
+    "emptyAccounts": "No regular accounts",
+    "readOnly": "Read-only access is active. Write operations are unavailable."
+  },
+  "boundApiKeys": {
+    "title": "Bound API Keys: {{name}}",
+    "description": "Shows ownership and permission summaries only. Secrets are never displayed.",
+    "read": "Read-only",
+    "write": "Read/write",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "empty": "No bound API keys",
+    "lastUsed": "Last used: {{value}}",
+    "neverUsed": "Never used"
   }
 }
