@@ -60,5 +60,10 @@
     "model": "模型",
     "baseUrl": "Base URL",
     "missing": "缺少必填项：{{fields}}。配置完整前，LLM 功能不可用。"
-  }
+  },
+  "tabs": {
+    "model": "模型设置",
+    "accounts": "账户管理"
+  },
+  "forbidden": "当前账户无权访问系统设置。"
 }

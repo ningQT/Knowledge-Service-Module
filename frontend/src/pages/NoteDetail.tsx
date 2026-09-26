@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkWikiLink from '@/plugins/remarkWikiLink'
 import rehypeHighlight from 'rehype-highlight'
-import { useInstanceStore } from '@/stores/useInstanceStore'
+import { canEditCurrentInstance, useInstanceStore } from '@/stores/useInstanceStore'
 import { getGraph } from '@/services/graph'
 import { deleteNote, getNote, updateNoteMetadata, updateNoteVerification, type NoteData, type UserVerification } from '@/services/notes'
 import { LoadingState } from '@/components/shared/LoadingState'
@@ -103,6 +103,7 @@ export default function NoteDetail() {
   const navigate = useNavigate()
   const location = useLocation()
   const { instanceId } = useInstanceStore()
+  const readOnly = Boolean(instanceId && !canEditCurrentInstance())
   const [note, setNote] = useState<NoteData | null>(null)
   const [loading, setLoading] = useState(true)
   const [relatedNodes, setRelatedNodes] = useState<RelatedNode[]>([])
@@ -270,7 +271,7 @@ export default function NoteDetail() {
     setMetadataOpen(true)
   }
   const saveMetadata = async () => {
-    if (!instanceId || !note || metadataUpdating) return
+    if (readOnly || !instanceId || !note || metadataUpdating) return
     setMetadataUpdating(true)
     setMetadataError(null)
     setMetadataMessage(null)
@@ -293,7 +294,7 @@ export default function NoteDetail() {
     }
   }
   const handleDeleteNote = async () => {
-    if (!instanceId || !note || deleting) return
+    if (readOnly || !instanceId || !note || deleting) return
     setDeleting(true)
     setDeleteError(null)
     try {
@@ -317,6 +318,12 @@ export default function NoteDetail() {
         <span className="min-w-0 truncate border-l border-border pl-3 font-medium text-foreground">{note.title}</span>
       </button>
 
+      {readOnly && (
+        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
+          {t('readOnly')}
+        </div>
+      )}
+
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
           {/* Metadata panel */}
@@ -324,7 +331,7 @@ export default function NoteDetail() {
             <div className="bg-card rounded-lg border border-border p-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="font-medium text-sm">{t('metadata.title')}</h3>
-                <Button variant="ghost" size="icon-xs" title={t('metadata.edit')} onClick={openMetadataDialog}>
+                <Button variant="ghost" size="icon-xs" title={t('metadata.edit')} onClick={openMetadataDialog} disabled={readOnly}>
                   <Pencil className="h-3 w-3" />
                 </Button>
               </div>
@@ -363,7 +370,7 @@ export default function NoteDetail() {
                 <button
                   type="button"
                   onClick={() => void updateReviewStatus(primaryReviewAction)}
-                  disabled={Boolean(reviewUpdating)}
+                  disabled={readOnly || Boolean(reviewUpdating)}
                   className="w-full rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
                 >
                   {reviewUpdating === primaryReviewAction ? '...' : t(getReviewActionLabelKey(primaryReviewAction))}
@@ -372,7 +379,7 @@ export default function NoteDetail() {
                   <button
                     type="button"
                     onClick={() => void updateReviewStatus('draft')}
-                    disabled={note.verification === 'draft' || Boolean(reviewUpdating)}
+                    disabled={readOnly || note.verification === 'draft' || Boolean(reviewUpdating)}
                     className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
                   >
                     {reviewUpdating === 'draft' ? '...' : t('review.markNeedsRevision')}
@@ -385,7 +392,7 @@ export default function NoteDetail() {
 
             <div className="bg-card rounded-lg border border-border p-4 space-y-3">
               <h3 className="font-medium text-sm">{t('delete.title')}</h3>
-              <Button variant="destructive" size="sm" className="w-full" onClick={() => setDeleteOpen(true)}>
+              <Button variant="destructive" size="sm" className="w-full" onClick={() => setDeleteOpen(true)} disabled={readOnly}>
                 <Trash2 className="h-4 w-4" />
                 {t('delete.button')}
               </Button>
@@ -472,7 +479,7 @@ export default function NoteDetail() {
             <Button variant="ghost" onClick={() => setMetadataOpen(false)}>
               {t('delete.cancel')}
             </Button>
-            <Button onClick={() => void saveMetadata()} disabled={metadataUpdating}>
+            <Button onClick={() => void saveMetadata()} disabled={readOnly || metadataUpdating}>
               {metadataUpdating && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('metadata.save')}
             </Button>
@@ -493,7 +500,7 @@ export default function NoteDetail() {
             <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
               {t('delete.cancel')}
             </Button>
-            <Button variant="destructive" onClick={() => void handleDeleteNote()} disabled={deleting}>
+            <Button variant="destructive" onClick={() => void handleDeleteNote()} disabled={readOnly || deleting}>
               {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('delete.confirm')}
             </Button>

@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { BookMarked, BookOpen, Database, KeyRound, LayoutDashboard, Network, Upload, Search, Settings, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslation } from 'react-i18next'
+import { useAuthStore } from '@/stores/useAuthStore'
 
 const navItems = [
   { icon: LayoutDashboard, labelKey: 'nav.dashboard', to: '/' },
@@ -13,7 +14,7 @@ const navItems = [
   { icon: BookMarked, labelKey: 'nav.searchLexicon', to: '/search-lexicon' },
   { icon: Database, labelKey: 'nav.ontology', to: '/ontology' },
   { icon: KeyRound, labelKey: 'nav.apiManagement', to: '/api-management' },
-  { icon: Settings, labelKey: 'nav.settings', to: '/settings' },
+  { icon: Settings, labelKey: 'nav.settings', to: '/settings', adminOnly: true },
 ]
 
 interface NoteRouteState {
@@ -34,11 +35,13 @@ function getNoteSourcePath(pathname: string, state: unknown) {
 function NavLinks({ onClick }: { onClick?: () => void }) {
   const { t } = useTranslation('layout')
   const location = useLocation()
+  const user = useAuthStore((state) => state.user)
   const noteSourcePath = getNoteSourcePath(location.pathname, location.state)
+  const visibleItems = navItems.filter((item) => !item.adminOnly || user?.role === 'admin')
 
   return (
     <nav className="flex-1 py-4 space-y-1 px-3">
-      {navItems.map((item) => (
+      {visibleItems.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}

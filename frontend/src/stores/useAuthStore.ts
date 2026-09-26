@@ -16,3 +16,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
   setSetupRequired: (required) => set({ setupRequired: required }),
   resetAuth: () => set({ user: null, setupRequired: false }),
 }))
+
+/**
+ * 判断当前用户是否为管理员。
+ *
+ * @returns 当前用户角色为管理员时返回 true
+ */
+export function useIsAdmin(): boolean {
+  return useAuthStore((state) => state.user?.role === 'admin')
+}

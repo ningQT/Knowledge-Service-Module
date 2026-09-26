@@ -7,18 +7,26 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.dependencies import (
     ensure_instance_access,
+    get_auth_service,
     get_db,
     get_instance_service,
-    require_admin_context,
+    require_console_context,
     require_read_context,
 )
 from app.api.models import (
+    BoundApiKeyListResponse,
+    BoundApiKeyResponse,
     CreateInstanceRequest,
+    DeleteInstanceRequest,
     InstanceDeleteResponse,
     InstanceDiagnosticsResponse,
     InstanceListResponse,
+    InstancePermissionAccount,
+    InstancePermissionListResponse,
+    InstancePermissionOwner,
     InstanceResponse,
     InstanceStatsResponse,
+    UpdateInstancePermissionsRequest,
     UpdateInstanceRequest,
 )
 from app.core.diagnostics_service import DiagnosticsService
@@ -29,14 +37,33 @@ router = APIRouter(prefix="/api/v1/instances", tags=["instances"])
 logger = logging.getLogger(__name__)
 
 
-def _instance_response(instance) -> InstanceResponse:
+def _instance_response(instance, auth=None) -> InstanceResponse:
     data = instance.to_dict()
     data["vault_path"] = None
+    owner_id = data.get("owner_account_id")
+    data["owner_account_id"] = owner_id
+    if auth is None:
+        return InstanceResponse(**data)
+    if auth.is_admin:
+        access_level = "admin"
+        can_edit = True
+        can_manage = True
+    else:
+        is_owner = auth.user_id == owner_id
+        permission = "edit" if is_owner else auth.permission_for(instance.id)
+        access_level = "owner" if is_owner else permission
+        can_edit = permission == "edit"
+        can_manage = is_owner
+    data.update(
+        access_level=access_level,
+        can_edit=can_edit,
+        can_manage=can_manage,
+    )
     return InstanceResponse(**data)
 
 
 @router.post("", response_model=InstanceResponse, status_code=201)
-async def create_instance(req: CreateInstanceRequest, _auth=Depends(require_admin_context)):
+async def create_instance(req: CreateInstanceRequest, auth=Depends(require_console_context)):
     """Create a new knowledge base instance."""
     started = time.perf_counter()
     log_event(
@@ -54,6 +81,7 @@ async def create_instance(req: CreateInstanceRequest, _auth=Depends(require_admi
             auto_map=req.auto_map,
             language=req.language,
             config=req.config,
+            owner_account_id=auth.user_id,
         )
     except InstanceAlreadyExistsError as e:
         log_event(
@@ -82,7 +110,7 @@ async def create_instance(req: CreateInstanceRequest, _auth=Depends(require_admi
         language=instance.language,
         duration_ms=_duration_ms(started),
     )
-    return _instance_response(instance)
+    return _instance_response(instance, auth)
 
 
 @router.get("", response_model=InstanceListResponse)
@@ -92,7 +120,7 @@ async def list_instances(auth=Depends(require_read_context)):
     instances = svc.list_instances()
     if not auth.is_admin:
         instances = [instance for instance in instances if instance.id in auth.instance_ids]
-    return InstanceListResponse(instances=[_instance_response(i) for i in instances])
+    return InstanceListResponse(instances=[_instance_response(i, auth) for i in instances])
 
 
 @router.get("/{instance_id}", response_model=InstanceResponse)
@@ -101,12 +129,18 @@ async def get_instance(instance_id: str, auth=Depends(require_read_context)):
     ensure_instance_access(auth, instance_id)
     svc = get_instance_service()
     instance = svc.get_instance(instance_id)
-    return _instance_response(instance)
+    return _instance_response(instance, auth)
 
 
 @router.patch("/{instance_id}", response_model=InstanceResponse)
-async def update_instance(instance_id: str, req: UpdateInstanceRequest, _auth=Depends(require_admin_context)):
+async def update_instance(
+    instance_id: str, req: UpdateInstanceRequest, auth=Depends(require_console_context)
+):
     """Update editable metadata for a knowledge base instance."""
+    if not get_auth_service().can_manage_instance(
+        auth.user_id or "", instance_id, is_admin=auth.is_admin
+    ):
+        raise HTTPException(status_code=403, detail="Instance access is denied")
     started = time.perf_counter()
     log_event(
         logger,
@@ -148,16 +182,24 @@ async def update_instance(instance_id: str, req: UpdateInstanceRequest, _auth=De
         auto_map=instance.auto_map,
         duration_ms=_duration_ms(started),
     )
-    return _instance_response(instance)
+    return _instance_response(instance, auth)
 
 
 @router.delete("/{instance_id}", response_model=InstanceDeleteResponse)
 async def delete_instance(
     instance_id: str,
+    req: DeleteInstanceRequest,
     delete_files: bool = Query(False, description="Also delete the local vault directory"),
-    _auth=Depends(require_admin_context),
+    auth=Depends(require_console_context),
 ):
     """Delete a knowledge base instance and optionally its local vault files."""
+    if not get_auth_service().can_manage_instance(
+        auth.user_id or "", instance_id, is_admin=auth.is_admin
+    ):
+        raise HTTPException(status_code=403, detail="Instance access is denied")
+    instance = get_instance_service().get_instance(instance_id)
+    if req.confirm_name != instance.name:
+        raise HTTPException(status_code=400, detail="Instance name confirmation does not match")
     started = time.perf_counter()
     log_event(logger, "instance.delete.start", instance_id=instance_id, delete_files=delete_files)
     svc = get_instance_service()
@@ -181,6 +223,80 @@ async def delete_instance(
         duration_ms=_duration_ms(started),
     )
     return InstanceDeleteResponse(deleted=True, id=instance_id, files_deleted=delete_files)
+
+
+@router.get("/{instance_id}/permissions", response_model=InstancePermissionListResponse)
+async def get_instance_permissions(
+    instance_id: str,
+    auth=Depends(require_console_context),
+):
+    """Return instance permission grants for administrators and owners."""
+    try:
+        data = get_auth_service().get_instance_permissions(
+            instance_id,
+            actor_id=auth.user_id or "",
+            is_admin=auth.is_admin,
+        )
+    except ValueError as exc:
+        status = 404 if str(exc) == "Instance not found" else 403
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    return InstancePermissionListResponse(
+        instance_id=data["instance_id"],
+        instance_name=data["instance_name"],
+        owner=InstancePermissionOwner(**data["owner"]),
+        accounts=[InstancePermissionAccount(**item) for item in data["accounts"]],
+    )
+
+
+@router.put("/{instance_id}/permissions", response_model=InstancePermissionListResponse)
+async def update_instance_permissions(
+    instance_id: str,
+    req: UpdateInstancePermissionsRequest,
+    auth=Depends(require_console_context),
+):
+    """Atomically update read/edit grants for one instance."""
+    try:
+        data = get_auth_service().update_instance_permissions(
+            instance_id,
+            [item.model_dump() for item in req.permissions],
+            actor_id=auth.user_id or "",
+            is_admin=auth.is_admin,
+        )
+    except ValueError as exc:
+        if str(exc) == "Instance not found":
+            status = 404
+        elif str(exc) == "Instance access denied":
+            status = 403
+        else:
+            status = 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    return InstancePermissionListResponse(
+        instance_id=data["instance_id"],
+        instance_name=data["instance_name"],
+        owner=InstancePermissionOwner(**data["owner"]),
+        accounts=[InstancePermissionAccount(**item) for item in data["accounts"]],
+    )
+
+
+@router.get("/{instance_id}/bound-api-keys", response_model=BoundApiKeyListResponse)
+async def get_bound_api_keys(
+    instance_id: str,
+    auth=Depends(require_console_context),
+):
+    """Return API key summaries bound to an instance without secrets."""
+    try:
+        keys = get_auth_service().list_bound_api_keys(
+            instance_id,
+            actor_id=auth.user_id or "",
+            is_admin=auth.is_admin,
+        )
+    except ValueError as exc:
+        status = 404 if str(exc) == "Instance not found" else 403
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    return BoundApiKeyListResponse(
+        instance_id=instance_id,
+        api_keys=[BoundApiKeyResponse(**item) for item in keys],
+    )
 
 
 def _duration_ms(started: float) -> int:
@@ -211,14 +327,16 @@ async def get_instance_stats(instance_id: str, auth=Depends(require_read_context
 
     # By verification
     ver_rows = db.execute(
-        "SELECT verification, COUNT(*) AS cnt FROM notes WHERE instance_id = ? GROUP BY verification",
+        "SELECT verification, COUNT(*) AS cnt FROM notes "
+        "WHERE instance_id = ? GROUP BY verification",
         (instance_id,),
     )
     by_verification = {r["verification"]: r["cnt"] for r in ver_rows if r["verification"]}
 
     # By domain
     dom_rows = db.execute(
-        "SELECT domain, COUNT(*) AS cnt FROM notes WHERE instance_id = ? AND domain IS NOT NULL GROUP BY domain",
+        "SELECT domain, COUNT(*) AS cnt FROM notes "
+        "WHERE instance_id = ? AND domain IS NOT NULL GROUP BY domain",
         (instance_id,),
     )
     by_domain = {r["domain"]: r["cnt"] for r in dom_rows if r["domain"]}
@@ -233,7 +351,9 @@ async def get_instance_stats(instance_id: str, auth=Depends(require_read_context
     last_ingest = db.execute(
         "SELECT MAX(indexed_at) AS last_ts FROM notes WHERE instance_id = ?", (instance_id,)
     )
-    last_ingest_at = last_ingest[0]["last_ts"] if last_ingest and last_ingest[0]["last_ts"] else None
+    last_ingest_at = (
+        last_ingest[0]["last_ts"] if last_ingest and last_ingest[0]["last_ts"] else None
+    )
 
     return InstanceStatsResponse(
         instance_id=instance_id,

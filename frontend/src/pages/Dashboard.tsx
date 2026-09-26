@@ -1,12 +1,16 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileText, Map, BookOpen, GitBranch, Upload, Search, Network, Plus, Loader2, Pencil, Trash2, Copy, Check } from 'lucide-react'
+import { FileText, Map, BookOpen, GitBranch, Upload, Search, Network, Plus, Loader2, Pencil, Trash2, Copy, Check, KeyRound, Shield } from 'lucide-react'
 import { useInstanceStore } from '@/stores/useInstanceStore'
-import { listInstances, getInstanceStats, updateInstance, deleteInstance } from '@/services/instances'
+import { listInstances, getInstanceStats, updateInstance } from '@/services/instances'
 import type { Instance, InstanceStats } from '@/types/api'
 import { LoadingState } from '@/components/shared/LoadingState'
 import { CreateInstanceDialog } from '@/components/shared/CreateInstanceDialog'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { InstancePermissionDialog } from '@/components/instances/InstancePermissionDialog'
+import { BoundApiKeysDialog } from '@/components/instances/BoundApiKeysDialog'
+import { DeleteInstanceDialog } from '@/components/instances/DeleteInstanceDialog'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -28,11 +32,10 @@ export default function Dashboard() {
   const [editing, setEditing] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Instance | null>(null)
-  const [deleteFiles, setDeleteFiles] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [manageMessage, setManageMessage] = useState<string | null>(null)
   const [copiedInstanceId, setCopiedInstanceId] = useState<string | null>(null)
+  const [permissionTarget, setPermissionTarget] = useState<Instance | null>(null)
+  const [boundKeysTarget, setBoundKeysTarget] = useState<Instance | null>(null)
 
   const refreshInstances = useCallback(async () => {
     const list = await listInstances()
@@ -82,29 +85,17 @@ export default function Dashboard() {
 
   const openDelete = useCallback((instance: Instance) => {
     setDeleteTarget(instance)
-    setDeleteFiles(false)
-    setDeleteError(null)
     setManageMessage(null)
   }, [])
 
-  const handleDelete = useCallback(async () => {
-    if (!deleteTarget || deleting) return
-    setDeleting(true)
-    setDeleteError(null)
-    try {
-      await deleteInstance(deleteTarget.id, { deleteFiles })
-      const list = await refreshInstances()
-      if (instanceId === deleteTarget.id) {
-        setInstanceId(list[0]?.id ?? null)
-      }
-      setDeleteTarget(null)
-      setManageMessage(t('manage.deleted'))
-    } catch (e) {
-      setDeleteError(formatApiError(t, e))
-    } finally {
-      setDeleting(false)
+  const handleDeleted = useCallback(async (deletedId: string) => {
+    const list = await refreshInstances()
+    if (instanceId === deletedId) {
+      setInstanceId(list[0]?.id ?? null)
     }
-  }, [deleteFiles, deleteTarget, deleting, instanceId, refreshInstances, setInstanceId, t])
+    setDeleteTarget(null)
+    setManageMessage(t('manage.deleted'))
+  }, [instanceId, refreshInstances, setInstanceId, t])
 
   const copyInstanceId = useCallback(async (id: string) => {
     try {
@@ -201,7 +192,14 @@ export default function Dashboard() {
                 }}
               >
                 <div className="min-w-0">
-                  <p className="font-medium">{inst.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">{inst.name}</p>
+                    {inst.access_level && (
+                      <Badge variant="outline">
+                        {t(`permission.${inst.access_level}`)}
+                      </Badge>
+                    )}
+                  </div>
                   <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
                     <span className="text-xs text-muted-foreground">{t('table.instanceId')}</span>
                     <code className="max-w-full truncate rounded border border-border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
@@ -233,30 +231,62 @@ export default function Dashboard() {
                   {new Date(inst.updated_at).toLocaleDateString()}
                 </span>
                 <div className="flex justify-end gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    title={t('manage.edit')}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      openEdit(inst)
-                    }}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    title={t('manage.delete')}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      openDelete(inst)
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  {inst.can_manage && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        title={t('manage.permissions')}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setPermissionTarget(inst)
+                        }}
+                      >
+                        <Shield className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        title={t('manage.boundApiKeys')}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setBoundKeysTarget(inst)
+                        }}
+                      >
+                        <KeyRound className="h-3 w-3" />
+                      </Button>
+                    </>
+                  )}
+                  {inst.can_manage && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        title={t('manage.edit')}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openEdit(inst)
+                        }}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        title={t('manage.delete')}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openDelete(inst)
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             )
@@ -292,6 +322,16 @@ export default function Dashboard() {
       </div>
 
       <CreateInstanceDialog open={createOpen} onOpenChange={setCreateOpen} onCreated={handleCreated} />
+      <InstancePermissionDialog
+        instance={permissionTarget}
+        open={Boolean(permissionTarget)}
+        onOpenChange={(open) => { if (!open) setPermissionTarget(null) }}
+      />
+      <BoundApiKeysDialog
+        instance={boundKeysTarget}
+        open={Boolean(boundKeysTarget)}
+        onOpenChange={(open) => { if (!open) setBoundKeysTarget(null) }}
+      />
 
       <Dialog open={Boolean(editTarget)} onOpenChange={(open) => { if (!open) setEditTarget(null) }}>
         <DialogContent>
@@ -327,34 +367,12 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('manage.deleteTitle')}</DialogTitle>
-            <DialogDescription>
-              {deleteTarget?.name ? `${t('manage.deleteDescription')} (${deleteTarget.name})` : t('manage.deleteDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <label className="flex items-center justify-between gap-3 rounded-md border border-border p-3 text-sm">
-              <span>{t('manage.deleteFiles')}</span>
-              <Switch checked={deleteFiles} onCheckedChange={setDeleteFiles} />
-            </label>
-            {deleteError && (
-              <div className="rounded bg-destructive/10 p-2 text-sm text-destructive">{deleteError}</div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
-              {t('manage.cancel')}
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
-              {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {t('manage.confirmDelete')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteInstanceDialog
+        instance={deleteTarget}
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}
+        onDeleted={(deletedId) => void handleDeleted(deletedId)}
+      />
     </div>
   )
 }

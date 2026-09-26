@@ -2,12 +2,18 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from app.api.dependencies import AUTH_COOKIE_NAME, get_auth_service, get_optional_auth_context, require_admin_context
+from app.api.dependencies import (
+    AUTH_COOKIE_NAME,
+    get_auth_service,
+    get_optional_auth_context,
+    require_console_context,
+)
 from app.api.models import (
     AdminSetupRequest,
     AdminUserResponse,
     AuthResponse,
     AuthStatusResponse,
+    ChangePasswordRequest,
     LoginRequest,
     LogoutResponse,
 )
@@ -23,8 +29,13 @@ async def auth_status(request: Request):
     svc = get_auth_service()
     context = await get_optional_auth_context(request)
     user = None
-    if context and context.is_admin:
-        user = AdminUserResponse(id=context.user_id or "", username=context.username or "")
+    if context and context.is_console:
+        user = AdminUserResponse(
+            id=context.user_id or "",
+            username=context.username or "",
+            role=context.role,
+            enabled=context.enabled,
+        )
     return AuthStatusResponse(
         setup_required=not svc.has_admin(),
         authenticated=bool(user),
@@ -54,7 +65,7 @@ async def login(req: LoginRequest, response: Response, request: Request):
     if not svc.has_admin():
         raise HTTPException(status_code=403, detail="Admin setup required")
 
-    user = svc.verify_admin(req.username, req.password)
+    user = svc.verify_credentials(req.username, req.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -74,11 +85,36 @@ async def logout(request: Request, response: Response):
 
 
 @router.get("/me", response_model=AuthResponse)
-async def me(context=Depends(require_admin_context)):
-    """Return the current administrator."""
+async def me(context=Depends(require_console_context)):
+    """Return the current console account."""
     return AuthResponse(
-        user=AdminUserResponse(id=context.user_id or "", username=context.username or "")
+        user=AdminUserResponse(
+            id=context.user_id or "",
+            username=context.username or "",
+            role=context.role,
+            enabled=context.enabled,
+        )
     )
+
+
+@router.post("/change-password", response_model=LogoutResponse)
+async def change_password(
+    req: ChangePasswordRequest,
+    response: Response,
+    request: Request,
+    context=Depends(require_console_context),
+):
+    """Change the current account password."""
+    try:
+        get_auth_service().change_password(
+            context.user_id or "",
+            req.current_password,
+            req.new_password,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    response.delete_cookie(AUTH_COOKIE_NAME, path="/", samesite="lax")
+    return LogoutResponse(logged_out=True)
 
 
 def _set_session_cookie(response: Response, request: Request, token: str, expires_at: str) -> None:

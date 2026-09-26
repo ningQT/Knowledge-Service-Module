@@ -16,6 +16,7 @@ const SearchLexiconPage = lazy(() => import('@/pages/SearchLexiconPage'))
 const OntologyPage = lazy(() => import('@/pages/OntologyPage'))
 const ApiManagementPage = lazy(() => import('@/pages/ApiManagementPage'))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
+const PersonalCenterPage = lazy(() => import('@/pages/PersonalCenterPage'))
 
 function RouteFallback() {
   return (
@@ -57,6 +58,7 @@ function getPageTitleKey(pathname: string) {
   if (pathname.startsWith('/search')) return 'nav.search'
   if (pathname.startsWith('/api-management')) return 'nav.apiManagement'
   if (pathname.startsWith('/settings')) return 'nav.settings'
+  if (pathname.startsWith('/profile')) return 'nav.profile'
   return ''
 }
 
@@ -77,6 +79,7 @@ export default function App() {
             <Route path="/ontology" element={withBoundary(<OntologyPage />)} />
             <Route path="/api-management" element={withBoundary(<ApiManagementPage />)} />
             <Route path="/settings" element={withBoundary(<SettingsPage />)} />
+            <Route path="/profile" element={withBoundary(<PersonalCenterPage />)} />
           </Route>
         </Routes>
       </AuthGate>

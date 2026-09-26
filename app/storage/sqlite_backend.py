@@ -4,10 +4,10 @@ import json
 import logging
 import sqlite3
 import threading
-from datetime import UTC, datetime
-from contextlib import contextmanager
-from pathlib import Path
 from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from app.storage.database import DatabaseBackend
@@ -67,6 +67,7 @@ class SQLiteBackend(DatabaseBackend):
         self.conn.executescript(schema_sql)
         self.conn.commit()
         self._record_schema_migration("0001_base_schema", "Base schema tables and indexes")
+        self._ensure_account_access_schema()
         self._ensure_notes_search_text_column()
         self._backfill_instance_ontology_enabled()
         fts_recreated = self._migrate_fts_if_needed()
@@ -127,6 +128,100 @@ class SQLiteBackend(DatabaseBackend):
             (version, description),
         )
 
+    def _ensure_column(self, table: str, column: str, definition: str) -> None:
+        """幂等为现有表补充列。
+
+        Args:
+            table: 目标表名，仅允许调用方传入固定内部表名。
+            column: 目标列名。
+            definition: SQLite ``ALTER TABLE`` 允许的列定义。
+
+        Raises:
+            sqlite3.Error: 当列探测或变更失败时向上抛出。
+        """
+        rows = self.conn.execute(f"PRAGMA table_info({table})").fetchall()
+        if not rows:
+            return
+        columns = {
+            row["name"] if isinstance(row, sqlite3.Row) else row[1]
+            for row in rows
+        }
+        if column not in columns:
+            self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            self.conn.commit()
+
+    def _ensure_account_access_schema(self) -> None:
+        """为账户、实例所有权和 API Key 所有权补齐兼容结构。
+
+        该方法在 ``schema.sql`` 执行后调用，负责旧库列补齐、旧数据回填和
+        新索引创建。迁移保持幂等，不删除已有知识数据或凭证。
+        """
+        self._ensure_column(
+            "admin_users",
+            "role",
+            "TEXT NOT NULL DEFAULT 'admin' CHECK(role IN ('admin', 'user'))",
+        )
+        self._ensure_column("admin_users", "enabled", "INTEGER NOT NULL DEFAULT 1")
+        self._ensure_column("instances", "owner_account_id", "TEXT")
+        self._ensure_column("api_clients", "owner_account_id", "TEXT")
+
+        self.conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS account_instance_permissions (
+                account_id TEXT NOT NULL,
+                instance_id TEXT NOT NULL,
+                permission TEXT NOT NULL CHECK(permission IN ('read', 'edit')),
+                granted_by_account_id TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (account_id, instance_id),
+                FOREIGN KEY (account_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+                FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE,
+                FOREIGN KEY (granted_by_account_id) REFERENCES admin_users(id) ON DELETE SET NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_instance_permissions_account
+                ON account_instance_permissions(account_id);
+            CREATE INDEX IF NOT EXISTS idx_instance_permissions_instance
+                ON account_instance_permissions(instance_id, permission);
+            CREATE INDEX IF NOT EXISTS idx_instances_owner
+                ON instances(owner_account_id);
+            CREATE INDEX IF NOT EXISTS idx_api_clients_owner
+                ON api_clients(owner_account_id, enabled);
+            """
+        )
+
+        admin_rows = self.conn.execute(
+            "SELECT id FROM admin_users WHERE role = 'admin' ORDER BY created_at LIMIT 1"
+        ).fetchall()
+        if not admin_rows:
+            legacy_rows = self.conn.execute(
+                "SELECT id FROM admin_users ORDER BY created_at LIMIT 1"
+            ).fetchall()
+            if legacy_rows:
+                admin_id = legacy_rows[0]["id"]
+                self.conn.execute(
+                    "UPDATE admin_users SET role = 'admin', enabled = 1 WHERE id = ?",
+                    (admin_id,),
+                )
+                admin_rows = legacy_rows
+
+        if admin_rows:
+            admin_id = admin_rows[0]["id"]
+            self.conn.execute(
+                "UPDATE instances SET owner_account_id = ? WHERE owner_account_id IS NULL",
+                (admin_id,),
+            )
+            self.conn.execute(
+                "UPDATE api_clients SET owner_account_id = ? WHERE owner_account_id IS NULL",
+                (admin_id,),
+            )
+
+        self.conn.commit()
+        self._record_schema_migration(
+            "0005_account_access_schema",
+            "Added account roles, instance ownership, permissions and API key ownership",
+        )
+
     def _ensure_notes_search_text_column(self) -> None:
         """Add notes.search_text for existing databases."""
         try:
@@ -152,9 +247,16 @@ class SQLiteBackend(DatabaseBackend):
                 instance_id = row["id"] if isinstance(row, sqlite3.Row) else row[0]
                 config_raw = row["config_json"] if isinstance(row, sqlite3.Row) else row[1]
                 try:
-                    config = json.loads(config_raw or "{}") if isinstance(config_raw, str) else (config_raw or {})
+                    config = (
+                        json.loads(config_raw or "{}")
+                        if isinstance(config_raw, str)
+                        else (config_raw or {})
+                    )
                 except (json.JSONDecodeError, TypeError):
-                    logger.warning("Skipping ontology_enabled backfill for instance %s: invalid config_json", instance_id)
+                    logger.warning(
+                        "Skipping ontology_enabled backfill for instance %s: invalid config_json",
+                        instance_id,
+                    )
                     continue
                 if not isinstance(config, dict) or "ontology_enabled" in config:
                     continue
@@ -216,7 +318,8 @@ class SQLiteBackend(DatabaseBackend):
                 )"""
             )
             self.conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_note_embeddings_instance ON note_embeddings(instance_id)"
+                "CREATE INDEX IF NOT EXISTS idx_note_embeddings_instance "
+                "ON note_embeddings(instance_id)"
             )
             self.conn.commit()
             self._record_schema_migration(

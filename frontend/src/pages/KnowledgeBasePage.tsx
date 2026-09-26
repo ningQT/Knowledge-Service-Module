@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ArrowDownAZ, BookOpen, CheckCircle2, FileText, Filter, Loader2, Plus, Search, Trash2, X } from 'lucide-react'
-import { isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
+import { canEditCurrentInstance, isInstanceRevisionCurrent, useInstanceStore } from '@/stores/useInstanceStore'
 import { deleteNote, listNoteFacets, listNotes, type ListNotesFilters, type NoteListItem } from '@/services/notes'
 import { getInstanceDiagnostics, listInstances } from '@/services/instances'
 import type { Instance, InstanceDiagnostics } from '@/types/api'
@@ -195,11 +195,13 @@ function NoteRow({
   note,
   onDelete,
   onOpen,
+  readOnly,
 }: {
   deleting: boolean
   note: NoteListItem
   onDelete: () => void
   onOpen: () => void
+  readOnly: boolean
 }) {
   const { t } = useTranslation(['knowledgeBase', 'common'])
 
@@ -275,7 +277,7 @@ function NoteRow({
           variant="ghost"
           size="icon-xs"
           title={t('actions.deleteNote')}
-          disabled={deleting}
+          disabled={deleting || readOnly}
           onClick={(e) => {
             e.stopPropagation()
             onDelete()
@@ -369,6 +371,7 @@ export default function KnowledgeBasePage() {
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const { t } = useTranslation(['knowledgeBase', 'common'])
+  const readOnly = Boolean(instanceId && !canEditCurrentInstance())
 
   const requestFilters = useMemo<ListNotesFilters>(() => ({
     domain: queryValue(filters.domain) || undefined,
@@ -611,6 +614,7 @@ export default function KnowledgeBasePage() {
                     key={note.file_path}
                     deleting={deletingPath === note.file_path}
                     note={note}
+                    readOnly={readOnly}
                     onDelete={() => {
                       setDeleteTarget(note)
                       setDeleteError(null)
@@ -639,7 +643,7 @@ export default function KnowledgeBasePage() {
             <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
               {t('actions.cancel')}
             </Button>
-            <Button variant="destructive" onClick={() => void handleDeleteNote()} disabled={Boolean(deletingPath)}>
+            <Button variant="destructive" onClick={() => void handleDeleteNote()} disabled={readOnly || Boolean(deletingPath)}>
               {deletingPath && <Loader2 className="h-4 w-4 animate-spin" />}
               {t('actions.confirmDelete')}
             </Button>

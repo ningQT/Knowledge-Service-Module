@@ -48,11 +48,23 @@
     "confirmDelete": "确认删除",
     "cancel": "取消",
     "updated": "知识库已更新",
-    "deleted": "知识库已删除"
+    "deleted": "知识库已删除",
+    "permissions": "实例权限",
+    "boundApiKeys": "已绑定 API Key",
+    "deleteImpactText": "将移除该实例的全部授权和 API Key 绑定。请输入实例名 {{name}} 确认。",
+    "deleteNamePlaceholder": "输入实例名称",
+    "deleteImpactCounts": "将移除 {{accounts}} 项账户授权和 {{keys}} 个 API Key 绑定。",
+    "deleteImpactLoading": "正在计算删除影响..."
   },
   "action": {
     "upload": "上传文档",
     "search": "检索",
     "graph": "打开图谱"
+  },
+  "permission": {
+    "admin": "管理员",
+    "owner": "所有者",
+    "edit": "编辑",
+    "read": "只读"
   }
 }

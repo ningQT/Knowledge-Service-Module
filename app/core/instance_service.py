@@ -4,7 +4,7 @@ import json
 import logging
 import shutil
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,7 @@ class InstanceInfo:
         self.name: str = data["name"]
         self.template_id: str = data["template_id"]
         self.vault_path: str = data["vault_path"]
+        self.owner_account_id: str | None = data.get("owner_account_id")
         self.auto_map: bool = bool(data.get("auto_map", True))
         self.language: str = _normalize_instance_language(data.get("language"))
         self.created_at: str = data["created_at"]
@@ -40,6 +41,7 @@ class InstanceInfo:
             "name": self.name,
             "template_id": self.template_id,
             "vault_path": self.vault_path,
+            "owner_account_id": self.owner_account_id,
             "auto_map": self.auto_map,
             "language": self.language,
             "created_at": self.created_at,
@@ -72,6 +74,7 @@ class InstanceService:
         auto_map: bool = True,
         language: str = DEFAULT_INSTANCE_LANGUAGE,
         config: dict | None = None,
+        owner_account_id: str | None = None,
     ) -> InstanceInfo:
         """Create a new knowledge base instance.
 
@@ -85,6 +88,13 @@ class InstanceService:
         normalized_name = name.strip()
         if not normalized_name:
             raise ValueError("Instance name is required")
+        if not owner_account_id:
+            admin_rows = self.db.execute(
+                "SELECT id FROM admin_users WHERE role = 'admin' ORDER BY created_at LIMIT 1"
+            )
+            if not admin_rows:
+                raise ValueError("Instance owner is required")
+            owner_account_id = admin_rows[0]["id"]
 
         existing = self.db.execute(
             "SELECT id FROM instances WHERE lower(trim(name)) = lower(?) LIMIT 1",
@@ -105,7 +115,7 @@ class InstanceService:
             raise ValueError("Instance vault path is outside the configured data directory")
         vault_path = str(vault_dir)
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         instance_config = dict(config or {})
         instance_config["language"] = _normalize_instance_language(language)
 
@@ -121,13 +131,16 @@ class InstanceService:
 
         # Insert into database
         self.db.execute(
-            """INSERT INTO instances (id, name, template_id, vault_path, auto_map, config_json, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            """INSERT INTO instances
+               (id, name, template_id, vault_path, owner_account_id,
+                auto_map, config_json, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 instance_id,
                 normalized_name,
                 template_id,
                 vault_path,
+                owner_account_id,
                 int(auto_map),
                 json.dumps(instance_config, ensure_ascii=False),
                 now,
@@ -137,28 +150,39 @@ class InstanceService:
 
         logger.info(f"Created instance: {instance_id} ({normalized_name}) at {vault_path}")
 
-        return InstanceInfo({
-            "id": instance_id,
-            "name": normalized_name,
-            "template_id": template_id,
-            "vault_path": vault_path,
-            "auto_map": auto_map,
-            "language": instance_config["language"],
-            "created_at": now,
-            "updated_at": now,
-        })
+        return InstanceInfo(
+            {
+                "id": instance_id,
+                "name": normalized_name,
+                "template_id": template_id,
+                "vault_path": vault_path,
+                "owner_account_id": owner_account_id,
+                "auto_map": auto_map,
+                "language": instance_config["language"],
+                "created_at": now,
+                "updated_at": now,
+            }
+        )
 
     def list_instances(self) -> list[InstanceInfo]:
         """List all knowledge base instances."""
         rows = self.db.execute(
-            "SELECT id, name, template_id, vault_path, auto_map, config_json, created_at, updated_at FROM instances ORDER BY created_at"
+
+                "SELECT id, name, template_id, vault_path, owner_account_id, "
+                "auto_map, config_json, created_at, updated_at "
+                "FROM instances ORDER BY created_at"
+
         )
         return [InstanceInfo(_row_with_language(row)) for row in rows]
 
     def get_instance(self, instance_id: str) -> InstanceInfo:
         """Get a single instance by ID."""
         rows = self.db.execute(
-            "SELECT id, name, template_id, vault_path, auto_map, config_json, created_at, updated_at FROM instances WHERE id = ?",
+            (
+                "SELECT id, name, template_id, vault_path, owner_account_id, "
+                "auto_map, config_json, created_at, updated_at "
+                "FROM instances WHERE id = ?"
+            ),
             (instance_id,),
         )
         if not rows:
@@ -187,7 +211,7 @@ class InstanceService:
             raise InstanceAlreadyExistsError(next_name)
 
         next_auto_map = current.auto_map if auto_map is None else bool(auto_map)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self.db.execute(
             """UPDATE instances
                SET name = ?, auto_map = ?, updated_at = ?
@@ -206,8 +230,8 @@ class InstanceService:
             if not vault_path.is_relative_to(data_dir) or vault_path == data_dir:
                 raise ValueError("Instance vault path is outside the configured data directory")
 
-        from app.storage.indexer import Indexer
         from app.pipeline.query_dictionary import invalidate_query_caches
+        from app.storage.indexer import Indexer
 
         Indexer(self.db).clear_instance_index(instance_id)
         self.db.execute("DELETE FROM ingest_jobs WHERE instance_id = ?", (instance_id,))

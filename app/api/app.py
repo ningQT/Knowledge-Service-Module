@@ -1,15 +1,15 @@
 """FastAPI application factory."""
 
-from contextlib import asynccontextmanager
-from pathlib import Path
 import logging
 import re
 import time
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.exceptions import RequestValidationError
 
 from app.config import get_settings
 from app.exceptions import KSMError
@@ -82,6 +82,22 @@ def _http_error_code(status_code: int, detail: object) -> str:
         return "AUTH_SETUP_ALREADY_DONE"
     if text == "Administrator access required":
         return "AUTH_FORBIDDEN"
+    if text == "Console access required":
+        return "CONSOLE_ACCESS_REQUIRED"
+    if text == "Write access required":
+        return "WRITE_ACCESS_REQUIRED"
+    if text == "Instance access is not allowed":
+        return "INSTANCE_ACCESS_DENIED"
+    if text == "Edit permission is required":
+        return "EDIT_PERMISSION_REQUIRED"
+    if text == "Account not found":
+        return "ACCOUNT_NOT_FOUND"
+    if text == "Username already exists":
+        return "ACCOUNT_USERNAME_EXISTS"
+    if text == "Username confirmation does not match":
+        return "ACCOUNT_CONFIRM_MISMATCH"
+    if text.startswith("Administrator account cannot"):
+        return "ADMIN_ACCOUNT_PROTECTED"
     if text == "API key scope is not allowed":
         return "API_KEY_SCOPE_FORBIDDEN"
     if text == "API key instance access is not allowed":
@@ -295,6 +311,7 @@ def create_app() -> FastAPI:
             content=_error_response_content(500, detail, "HTTP_500", detail, settings),
         )
 
+    from app.api.routes.accounts import router as accounts_router
     from app.api.routes.api_keys import router as api_keys_router
     from app.api.routes.auth import router as auth_router
     from app.api.routes.graph import router as graph_router
@@ -308,6 +325,7 @@ def create_app() -> FastAPI:
     from app.api.routes.sync import router as sync_router
 
     app.include_router(auth_router)
+    app.include_router(accounts_router)
     app.include_router(api_keys_router)
     app.include_router(instances_router)
     app.include_router(ingest_router)

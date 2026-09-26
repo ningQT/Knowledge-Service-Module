@@ -12,7 +12,14 @@
     "settings": "Settings"
   },
   "instance": {
-    "placeholder": "Select Instance"
+    "placeholder": "Select Instance",
+    "readOnly": "Read-only access is active. Write operations are unavailable.",
+    "access": {
+      "admin": "Admin",
+      "owner": "Owner",
+      "edit": "Edit",
+      "read": "Read-only"
+    }
   },
   "language": {
     "en": "EN",
@@ -24,5 +31,10 @@
   "aria": {
     "openMenu": "Open menu",
     "closeMenu": "Close menu"
+  },
+  "profile": "Personal Center",
+  "accountType": {
+    "admin": "Administrator",
+    "user": "Regular account"
   }
 }

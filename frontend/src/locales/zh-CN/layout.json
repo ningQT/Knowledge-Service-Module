@@ -12,7 +12,14 @@
     "settings": "设置"
   },
   "instance": {
-    "placeholder": "选择实例"
+    "placeholder": "选择实例",
+    "readOnly": "当前为只读权限，写操作不可用。",
+    "access": {
+      "admin": "管理员",
+      "owner": "所有者",
+      "edit": "编辑",
+      "read": "只读"
+    }
   },
   "language": {
     "en": "EN",
@@ -24,5 +31,10 @@
   "aria": {
     "openMenu": "打开菜单",
     "closeMenu": "关闭菜单"
+  },
+  "profile": "个人中心",
+  "accountType": {
+    "admin": "管理员",
+    "user": "普通账户"
   }
 }

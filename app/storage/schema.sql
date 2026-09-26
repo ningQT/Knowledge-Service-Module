@@ -13,10 +13,12 @@ CREATE TABLE IF NOT EXISTS instances /* 知识库实例表 */ (
     name TEXT NOT NULL /* 实例显示名称 */,
     template_id TEXT NOT NULL /* 创建实例时使用的模板ID */,
     vault_path TEXT NOT NULL /* 实例对应的本地 vault 根路径 */,
+    owner_account_id TEXT /* 实例所有者账户ID；业务层要求非空 */,
     auto_map INTEGER NOT NULL DEFAULT 1 /* 是否在写入时自动生成知识地图，1=开启，0=关闭 */,
     config_json TEXT DEFAULT '{}' /* 实例级配置 JSON */,
     created_at TEXT NOT NULL /* 实例创建时间，ISO 字符串 */,
-    updated_at TEXT NOT NULL /* 实例更新时间，ISO 字符串 */
+    updated_at TEXT NOT NULL /* 实例更新时间，ISO 字符串 */,
+    FOREIGN KEY (owner_account_id) REFERENCES admin_users(id)
 );
 
 -- 知识文件索引表
@@ -149,6 +151,8 @@ CREATE TABLE IF NOT EXISTS admin_users (
     password_hash TEXT NOT NULL,
     password_salt TEXT NOT NULL,
     password_iterations INTEGER NOT NULL,
+    role TEXT NOT NULL DEFAULT 'admin' CHECK(role IN ('admin', 'user')),
+    enabled INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -171,9 +175,11 @@ CREATE TABLE IF NOT EXISTS api_clients (
     key_hash TEXT NOT NULL UNIQUE,
     scope TEXT NOT NULL CHECK(scope IN ('read', 'write')),
     enabled INTEGER NOT NULL DEFAULT 1,
+    owner_account_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    last_used_at TEXT
+    last_used_at TEXT,
+    FOREIGN KEY (owner_account_id) REFERENCES admin_users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS api_client_instances (
@@ -183,6 +189,22 @@ CREATE TABLE IF NOT EXISTS api_client_instances (
     FOREIGN KEY (client_id) REFERENCES api_clients(id) ON DELETE CASCADE,
     FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS account_instance_permissions (
+    account_id TEXT NOT NULL,
+    instance_id TEXT NOT NULL,
+    permission TEXT NOT NULL CHECK(permission IN ('read', 'edit')),
+    granted_by_account_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (account_id, instance_id),
+    FOREIGN KEY (account_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+    FOREIGN KEY (instance_id) REFERENCES instances(id) ON DELETE CASCADE,
+    FOREIGN KEY (granted_by_account_id) REFERENCES admin_users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_instance_permissions_account ON account_instance_permissions(account_id);
+CREATE INDEX IF NOT EXISTS idx_instance_permissions_instance ON account_instance_permissions(instance_id, permission);
 
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at);

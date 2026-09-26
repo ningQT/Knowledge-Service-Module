@@ -1,5 +1,11 @@
 import api from './client'
-import type { Instance, InstanceDiagnostics, InstanceStats } from '@/types/api'
+import type {
+  BoundApiKey,
+  Instance,
+  InstanceDiagnostics,
+  InstancePermissionResponse,
+  InstanceStats,
+} from '@/types/api'
 
 export async function listInstances(): Promise<Instance[]> {
   const data = await api.get('instances').json<{ instances: Instance[] }>()
@@ -36,11 +42,31 @@ export async function updateInstance(
 
 export async function deleteInstance(
   id: string,
+  confirmName: string,
   options: { deleteFiles?: boolean } = {}
 ): Promise<{ deleted: boolean; id: string; path: string | null; files_deleted: boolean }> {
   return api
     .delete(`instances/${id}`, {
+      json: { confirm_name: confirmName },
       searchParams: { delete_files: String(Boolean(options.deleteFiles)) },
     })
     .json<{ deleted: boolean; id: string; path: string | null; files_deleted: boolean }>()
+}
+
+export async function getInstancePermissions(id: string): Promise<InstancePermissionResponse> {
+  return api.get(`instances/${id}/permissions`).json<InstancePermissionResponse>()
+}
+
+export async function updateInstancePermissions(
+  id: string,
+  permissions: Array<{ account_id: string; permission: 'none' | 'read' | 'edit' }>
+): Promise<InstancePermissionResponse> {
+  return api
+    .put(`instances/${id}/permissions`, { json: { permissions } })
+    .json<InstancePermissionResponse>()
+}
+
+export async function listBoundApiKeys(id: string): Promise<BoundApiKey[]> {
+  const data = await api.get(`instances/${id}/bound-api-keys`).json<{ api_keys: BoundApiKey[] }>()
+  return data.api_keys
 }

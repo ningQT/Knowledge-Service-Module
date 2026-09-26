@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { LogOut, Moon, Sun, Languages, UserCircle } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useTheme } from '@/hooks/useTheme'
 import { useLanguage } from '@/hooks/useLanguage'
 import { logout } from '@/services/auth'
@@ -8,6 +8,7 @@ import { listInstances } from '@/services/instances'
 import { useAuthStore } from '@/stores/useAuthStore'
 import { useInstanceStore } from '@/stores/useInstanceStore'
 import type { Instance } from '@/types/api'
+import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useTranslation } from 'react-i18next'
 
@@ -18,6 +19,7 @@ export function AppHeader() {
   const { instances, instanceId, setInstanceId, setInstances } = useInstanceStore()
   const navigate = useNavigate()
   const { t } = useTranslation('layout')
+  const currentInstance = instances.find((item) => item.id === instanceId)
 
   useEffect(() => {
     if (instances.length > 0) return
@@ -58,10 +60,16 @@ export function AppHeader() {
             {instances.map((inst: Instance) => (
               <SelectItem key={inst.id} value={inst.id}>
                 {inst.name}
+                {inst.access_level ? ` ? ${t(`instance.access.${inst.access_level}`)}` : ''}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        {currentInstance?.access_level && (
+          <Badge variant={currentInstance.can_edit ? 'secondary' : 'outline'}>
+            {t(`instance.access.${currentInstance.access_level}`)}
+          </Badge>
+        )}
 
         <button
           onClick={toggleLanguage}
@@ -81,10 +89,17 @@ export function AppHeader() {
 
         {user && (
           <div className="flex items-center gap-2 border-l border-border pl-4">
-            <div className="hidden items-center gap-1.5 text-sm text-muted-foreground sm:flex">
+            <Link
+              to="/profile"
+              className="hidden items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground sm:flex"
+              title={t('profile')}
+            >
               <UserCircle className="h-4 w-4" />
               <span className="max-w-32 truncate">{user.username}</span>
-            </div>
+              <span className="rounded border border-border px-1.5 py-0.5 text-[10px] leading-none">
+                {t(`accountType.${user.role}`)}
+              </span>
+            </Link>
             <button
               onClick={handleLogout}
               className="p-2 hover:bg-muted rounded-md text-muted-foreground hover:text-foreground"

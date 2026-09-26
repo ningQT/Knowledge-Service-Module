@@ -30,6 +30,7 @@ from app.api.models import (
     SseTokenResponse,
 )
 from app.config import get_settings
+from app.core.job_access import job_access_registry
 from app.exceptions import PipelineCancelledException
 from app.observability import log_event
 from app.security.sse_tokens import sse_token_store
@@ -72,7 +73,12 @@ class IngestJobState:
 
     def __post_init__(self):
         self.steps = [
-            {"step": i, "name": _STEP_NAMES.get(i, f"Step {i}"), "status": "pending", "summary": None}
+            {
+                "step": i,
+                "name": _STEP_NAMES.get(i, f"Step {i}"),
+                "status": "pending",
+                "summary": None,
+            }
             for i in range(1, 9)
         ]
 
@@ -109,7 +115,11 @@ def _cleanup_old_jobs():
         if job.status in ("success", "partial_failed", "failed", "cancelled"):
             # Parse started_at to check age
             try:
-                job_time = datetime.fromisoformat(job.started_at).timestamp() if job.started_at else 0
+                job_time = (
+                    datetime.fromisoformat(job.started_at).timestamp()
+                    if job.started_at
+                    else 0
+                )
                 if now - job_time > 3600:
                     to_remove.append(jid)
             except (ValueError, TypeError):
@@ -245,7 +255,10 @@ async def ingest_async(
             if job.instance_id == instance_id and job.status in ("pending", "running"):
                 raise HTTPException(
                     status_code=409,
-                    detail=f"Instance '{instance_id}' already has a running ingest job: {job.job_id}",
+                    detail=(
+                        f"Instance '{instance_id}' already has a running ingest job: "
+                        f"{job.job_id}"
+                    ),
                 )
 
     content = await _read_markdown_upload(file)
@@ -268,6 +281,12 @@ async def ingest_async(
         _active_jobs[job_id] = job
         # Cleanup old jobs periodically (N-01: 在锁保护范围内调用)
         _cleanup_old_jobs()
+    job_access_registry.register(
+        job_id,
+        auth.user_id or auth.client_id or "",
+        instance_id,
+        "write",
+    )
 
     log_event(
         logger,
@@ -327,7 +346,11 @@ async def _run_ingest_background(
         elif status in {"completed", "failed"}:
             log_event(
                 logger,
-                "process.ingest.step.done" if status == "completed" else "process.ingest.step.error",
+                (
+                    "process.ingest.step.done"
+                    if status == "completed"
+                    else "process.ingest.step.error"
+                ),
                 level=logging.INFO if status == "completed" else logging.ERROR,
                 job_id=job.job_id,
                 instance_id=instance_id,
@@ -354,14 +377,18 @@ async def _run_ingest_background(
 
     def _cancel_check() -> bool:
         with job.lock:
-            return job.cancelled
+            return job.cancelled or bool(
+                job_access_registry.cancellation_reason(job.job_id)
+            )
 
     def _execute():
         db = None
         try:
             # 设计文档 §885: 后台线程创建独立的 SQLiteBackend 实例，不复用缓存的单例
             svc, db = get_ingest_service_for_background()
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as tmp:
+            with tempfile.NamedTemporaryFile(
+                mode="w", suffix=".md", delete=False, encoding="utf-8"
+            ) as tmp:
                 tmp.write(markdown)
                 tmp_path = tmp.name
 
@@ -486,7 +513,10 @@ async def _run_ingest_background(
                 except asyncio.QueueFull:
                     pass
 
-    await asyncio.to_thread(_execute)
+    try:
+        await asyncio.to_thread(_execute)
+    finally:
+        job_access_registry.unregister(job.job_id)
 
 
 # --- Job polling ---
@@ -499,7 +529,10 @@ async def get_job_status(instance_id: str, job_id: str, auth=Depends(require_rea
     if not job:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
     if job.instance_id != instance_id:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found in instance '{instance_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Job '{job_id}' not found in instance '{instance_id}'",
+        )
 
     with job.lock:
         return IngestJobResponse(
@@ -524,7 +557,10 @@ async def create_job_sse_token(instance_id: str, job_id: str, auth=Depends(requi
     if not job:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
     if job.instance_id != instance_id:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found in instance '{instance_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Job '{job_id}' not found in instance '{instance_id}'",
+        )
 
     token, expires_at = sse_token_store.create(
         endpoint="ingest",
@@ -550,7 +586,10 @@ async def job_sse_stream(
     if not job:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
     if job.instance_id != instance_id:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found in instance '{instance_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Job '{job_id}' not found in instance '{instance_id}'",
+        )
     await _authorize_ingest_sse(request, instance_id, job_id, sse_token)
 
     queue: asyncio.Queue = asyncio.Queue(maxsize=100)
@@ -584,6 +623,19 @@ async def job_sse_stream(
 
             # Stream new events
             while True:
+                if job_access_registry.cancellation_reason(job.job_id):
+                    yield {
+                        "event": "job_cancelled",
+                        "data": json.dumps(
+                            {
+                                "job_id": job.job_id,
+                                "reason": job_access_registry.cancellation_reason(
+                                    job.job_id
+                                ),
+                            }
+                        ),
+                    }
+                    return
                 event = await queue.get()
                 if event is None:  # Sentinel: job finished
                     break
@@ -624,11 +676,17 @@ async def cancel_job(instance_id: str, job_id: str, auth=Depends(require_write_c
     if not job:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
     if job.instance_id != instance_id:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found in instance '{instance_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Job '{job_id}' not found in instance '{instance_id}'",
+        )
 
     with job.lock:
         if job.status not in ("pending", "running"):
-            raise HTTPException(status_code=409, detail=f"Job '{job_id}' is not running (status: {job.status})")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Job '{job_id}' is not running (status: {job.status})",
+            )
         job.cancelled = True
 
     return CancelJobResponse(cancelled=True, message=f"Job {job_id} has been cancelled")

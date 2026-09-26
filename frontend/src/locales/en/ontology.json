@@ -97,6 +97,7 @@
     "enable": "Enable ontology",
     "disable": "Disable ontology",
     "enabled": "Enabled",
-    "disabled": "Disabled"
+    "disabled": "Disabled",
+    "ownerOnly": "Only the administrator or instance owner can toggle ontology for this instance."
   }
 }
